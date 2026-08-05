@@ -1,286 +1,215 @@
-# PDS Template Repository for Python
+# PDS CloudFront Real-Time Logging Terraform
 
-🚨 PLEASE GO THROUGH THIS ENTIRE FILE AND UPDATE IT FOR YOUR OWN PROJECT. DELETE SECTIONS THAT AREN'T RELEVEANT. DON'T LEAVE THE BOILERPLATE INTACT! 🚨
+This incremental package creates and configures:
 
-This is the template repository for PDS's Python projects.
+1. `pds-cloudfront-realtime-log-transform-lambda-role`
+2. `pds-cloudfront-realtime-log-kinesis-role`
+3. `pds-cloudfront-realtime-firehose-role`
+4. S3 Firehose backup bucket
+5. Kinesis Data Stream
+6. Lambda transform function
+7. Firehose security group and OpenSearch security-group ingress
+8. A data-source reference to the existing OpenSearch domain
+9. CloudFront real-time log configuration
+10. Kinesis Data Firehose delivery stream
 
-This repository aims at being a base for new python repositories used in PDS. It guides developers to ease the initialization of a project and recommends preferred options to standardize developments and ease maintenance. Simply click the <kbd>Use this template</kbd> button ↑ (or use [this hyperlink](https://github.com/NASA-PDS/pds-template-repo-python/generate)).
 
+## Firehose delivery stream
 
-## 🏃 Getting Started With This Template
+Terraform creates:
 
-See our wiki page for more info on setting up your new repo. You can remove this section once you have completed the necessary start-up steps.
-
-https://github.com/NASA-PDS/nasa-pds.github.io/wiki/Git-and-Github-Guide#creating-a-new-repo
-
-**👉 Important!** You must assign the teams as mentioned on the wiki page above! At a minimum, these are:
-
-| Team                                | Permission |
-| ----------------------------------- | ---------- |
-| `@NASA-PDS/pds-software-committers` | `write`    |
-| `@NASA-PDS/pds-software-pmc`        | `admin`    |
-| `@NASA-PDS/pds-operations`          | `admin`    |
-
----
-
-# My Project
-
-This is the XYZ that does this, that, and the other thing for the Planetary Data System.
-
-Please visit our website at: https://nasa-pds.github.io/pds-my-project
-
-It has useful information for developers and end-users.
-
-## Prerequisites
-
-Include any system-wide requirements (`brew install`, `apt-get install`, `yum install`, …) **Python 3.13** should be used until we say otherwise.
-
-
-## User Quickstart
-
-Install with:
-
-    pip install my_pds_module
-
-If possible, make it so that your program works out of the box without any additional configuration—but see the [Configuration](###configuration) section for details.
-
-To execute, run:
-
-    (put your run commands here)
-
-
-## Code of Conduct
-
-All users and developers of the NASA-PDS software are expected to abide by our [Code of Conduct](https://github.com/NASA-PDS/.github/blob/main/CODE_OF_CONDUCT.md). Please read this to ensure you understand the expectations of our community.
-
-
-## Development
-
-To develop this project, use your favorite text editor, or an integrated development environment with Python support, such as [PyCharm](https://www.jetbrains.com/pycharm/).
-
-
-### Contributing
-
-For information on how to contribute to NASA-PDS codebases please take a look at our [Contributing guidelines](https://github.com/NASA-PDS/.github/blob/main/CONTRIBUTING.md).
-
-
-### Installation
-
-Install in editable mode and with extra developer dependencies into your virtual environment of choice:
-
-    pip install --editable '.[dev]'
-
-Make a baseline for any secrets (email addresses, passwords, API keys, etc.) in the repository:
-
-    scripts/detect_secrets_baseline.sh scan
-
-Review and classify each detected secret (mark as `is_secret: true/false`):
-
-    scripts/detect_secrets_baseline.sh audit
-
-Commit the baseline:
-
-    git add .secrets.baseline
-
-To exclude additional files specific to this repo from scanning, add regex patterns (one per line) to `.detect-secrets-ignore`. Global exclusions (`.git`, `venv`, `dist`, etc.) are already handled by the script.
-
-Then, configure the `pre-commit` hooks:
-
-    pre-commit install
-    pre-commit install -t pre-push
-    pre-commit install -t prepare-commit-msg
-    pre-commit install -t commit-msg
-
-These hooks then will check for any future commits that might contain secrets. They also check code formatting, PEP8 compliance, type hints, etc.
-
-
-### Packaging
-
-To isolate and be able to re-produce the environment for this package, you should use a [Python Virtual Environment](https://docs.python.org/3/tutorial/venv.html). To do so, run:
-
-    python -m venv venv
-    source venv/bin/activate  # or activate.csh for csh/tcsh users
-
-If you have `tox` installed and would like it to create your environment and install dependencies for you run:
-
-    tox --devenv <name you'd like for env> -e dev
-
-Dependencies for development are specified as the `dev` `extras_require` in `setup.cfg`; they are installed into the virtual environment as follows:
-
-    pip install --editable '.[dev]'
-
-All the source code is in a sub-directory under `src`.
-
-You should update the `setup.cfg` file with:
-
-- name of your module
-- license, default apache, update if needed
-- description
-- download url, when you release your package on github add the url here
-- keywords
-- classifiers
-- install_requires, add the dependencies of you package
-- extras_require, add the development Dependencies of your package
-- entry_points, when your package can be called in command line, this helps to deploy command lines entry points pointing to scripts in your package
-
-For the packaging details, see https://packaging.python.org/tutorials/packaging-projects/ as a reference.
-
-
-### Configuration
-
-It is convenient to use ConfigParser package to manage configuration. It allows a default configuration which can be overwritten by the user in a specific file in their environment. See https://pymotw.com/2/ConfigParser/
-
-For example:
-
-    candidates = ['my_pds_module.ini', 'my_pds_module.ini.default']
-    found = parser.read(candidates)
-
-
-### Logs
-
-You should not use `print()`vin the purpose of logging information on the execution of your code. Depending on where the code runs these information could be redirected to specific log files.
-
-To make that work, start each Python file with:
-
-```python
-"""My module."""
-import logging
-
-logger = logging.getLogger(__name__)
+```text
+pds-cloudfront-realtime-firehose
 ```
 
-To log a message:
+The stream:
 
-    logger.info("my message")
+- Reads from `pds-cloudfront-realtime-kinesis-stream`
+- Invokes `pds-cloudfront-realtime-log-transform` using `$LATEST`
+- Delivers transformed records to the existing `pds-<env>-observability` domain
+- Writes to the daily-rotated `pds-cloudfront-realtime-index` index
+- Uses the existing private subnets and `pds-cloudfront-realtime-firehose-sg`
+- Backs up all documents to the existing S3 backup bucket in GZIP format
+- Uses a 1 MiB OpenSearch buffer and the provider-supported 60-second interval
+- Retries OpenSearch delivery for 300 seconds
 
-In your `main` routine, include:
+S3 object prefixes:
 
-    logging.basicConfig(level=logging.INFO)
+```text
+backup/YYYY/MM/DD/HH/
+errors/<error-type>/YYYY/MM/DD/HH/
+```
 
-to get a basic logging system configured.
+The Lambda processor receives up to 1 MiB per invocation or records accumulated
+for 60 seconds, whichever threshold is reached first.
 
+## CloudFront real-time log configuration
 
-### Tooling
+Terraform creates:
 
-The `dev` `extras_require` included in the template repo installs `black`, `flake8` (plus some plugins), and `mypy` along with default configuration for all of them. You can run all of these (and more!) with:
+```text
+pds-cloudfront-realtime-log-config
+```
 
-    tox -e lint
+Settings:
 
+- Sampling rate: `100` percent
+- Destination: the Kinesis stream created by this package
+- IAM role: `pds-cloudfront-realtime-log-kinesis-role`
+- Fields: the 17 fields required by the Lambda transform, in the exact parsing order
 
-### Code Style
+This package creates the real-time log configuration but does not manage the
+existing CloudFront distribution. In the Terraform stack that owns the
+distribution, add the configuration ARN to both existing ordered cache
+behaviors:
 
-So that your code is readable, you should comply with the [PEP8 style guide](https://www.python.org/dev/peps/pep-0008/). Our code style is automatically enforced in via [black](https://pypi.org/project/black/) and [flake8](https://flake8.pycqa.org/en/latest/). See the [Tooling section](#-tooling) for information on invoking the linting pipeline.
+```hcl
+ordered_cache_behavior {
+  path_pattern            = "/data*"
+  realtime_log_config_arn = <this-package-cloudfront_realtime_log_config_arn>
 
-❗Important note for template users❗
-The included [pre-commit configuration file](.pre-commit-config.yaml) executes `flake8` (along with `mypy`) across the entire `src` folder and not only on changed files. If you're converting a pre-existing code base over to this template that may result in a lot of errors that you aren't ready to deal with.
+  # Keep the existing behavior settings unchanged.
+}
 
-You can instead execute `flake8` only over a diff of the current changes being made by modifying the `pre-commit` `entry` line:
+ordered_cache_behavior {
+  path_pattern            = "/data/store/img*"
+  realtime_log_config_arn = <this-package-cloudfront_realtime_log_config_arn>
 
-    entry: git diff -u | flake8 --diff
+  # Keep the existing behavior settings unchanged.
+}
+```
 
-Or you can change the `pre-commit` config so `flake8` is only called on changed files which match a certain filtering criteria:
+CloudFront evaluates ordered cache behaviors by precedence. Preserve the
+existing ordering, especially because `/data/store/img*` is more specific than
+`/data*`.
 
-    -   repo: local
-        hooks:
-        -   id: flake8
-            name: flake8
-            entry: flake8
-            files: ^src/|tests/
-            language: system
+## Existing OpenSearch domain
 
+The package does not create or manage the domain. It reads:
 
-### Recommended Libraries
+```text
+pds-<env>-observability
+```
 
-Python offers a large variety of libraries. In PDS scope, for the most current usage we should use:
+through `data.aws_opensearch_domain.observability`.
 
-| Library      | Usage                                           |
-|--------------|------------------------------------------------ |
-| configparser | manage and parse configuration files            |
-| argparse     | command line argument documentation and parsing |
-| requests     | interact with web APIs                          |
-| lxml         | read/write XML files                            |
-| json         | read/write JSON files                           |
-| pyyaml       | read/write YAML files                           |
-| pystache     | generate files from templates                   |
+The package also does not replace the domain access policy. The Terraform stack
+that owns the existing domain must add the Firehose role principal with
+`es:*` access to the domain ARN and `domain-arn/*`. This avoids overwriting
+existing Logstash or administrator access.
 
-Some of these are built into Python 3; others are open source add-ons you can include in your `requirements.txt`.
+Fine-grained access control is unchanged and remains disabled.
 
+## Existing network resources
 
-### Tests
+Supply these existing resource IDs in `terraform.tfvars`:
 
-This section describes testing for your package.
+```hcl
+vpc_id                      = "vpc-..."
+private_subnet_ids           = ["subnet-...", "subnet-..."]
+opensearch_security_group_id = "sg-..."
+```
 
-A complete "build" including test execution, linting (`mypy`, `black`, `flake8`, etc.), and documentation build is executed via:
+`private_subnet_ids` is used by the Firehose VPC configuration.
 
-    tox
+## Firehose security group
 
+Terraform creates:
 
-#### Unit tests
+```text
+pds-cloudfront-realtime-firehose-sg
+```
 
-Your project should have built-in unit tests, functional, validation, acceptance, etc., tests.
+Rules:
 
-For unit testing, check out the [unittest](https://docs.python.org/3/library/unittest.html) module, built into Python 3.
+- No inbound rules on the Firehose security group
+- Outbound: all IPv4 protocols and ports to `0.0.0.0/0`
+- Existing OpenSearch SG inbound: TCP 443 from the Firehose SG
 
-Tests objects should be in packages `test` modules or preferably in project 'tests' directory which mirrors the project package structure.
+## OpenSearch ingest path
 
-Our unit tests are launched with command:
+Firehose OpenSearch destination settings:
 
-    pytest
+```text
+Base index: pds-cloudfront-realtime-index
+Rotation:   OneDay
+Pattern:    pds-cloudfront-realtime-index-YYYY-MM-DD
+```
 
-If you want your tests to run automatically as you make changes start up `pytest` in watch mode with:
+After Firehose is created and records are delivered, use OpenSearch Dashboards
+Dev Tools to locate the indexes:
 
-    ptw
+```http
+GET _cat/indices/pds-cloudfront-realtime-index-*?v&s=index
+```
 
+Use this data-view pattern in OpenSearch Dashboards:
 
-#### Integration/Behavioral Tests
+```text
+pds-cloudfront-realtime-index-*
+```
 
-One should use the `behave package` and push the test results to "testrail".
+Select `@timestamp` as the time field.
 
-See an example in https://github.com/NASA-PDS/pds-doi-service#behavioral-testing-for-integration--testing
+## Other resource settings
 
+### S3 backup bucket
 
-### Documentation
+```text
+pds-<node>-<env>-cloudfront-firehose-backup
+```
 
-Your project should use [Sphinx](https://www.sphinx-doc.org/en/master/) to build its documentation. PDS' documentation template is already configured as part of the default build. You can build your projects docs with:
+Includes AES256 encryption, versioning, BucketOwnerEnforced ownership, and all
+S3 public-access blocks.
 
-    sphinx-build docs/source docs/build
+### Kinesis stream
 
-You can access the build files in the following directory relative to the project root:
+```text
+pds-cloudfront-realtime-kinesis-stream
+```
 
-    build/sphinx/index.html
+- On-demand mode
+- 90-day retention (`2160` hours)
+- Server-side encryption disabled
 
+### Lambda transform
 
-## Build
+```text
+pds-cloudfront-realtime-log-transform
+```
 
-    pip install build
-    python -m build .
+- Python 3.12
+- `x86_64`
+- 512 MB memory
+- 300-second timeout
+- 512 MB ephemeral storage
+- `$LATEST` (`publish = false`)
+- 30-day CloudWatch Logs retention
 
+## Deploy
 
-## Publication
+```bash
+cp -p terraform.tfvars.example terraform.tfvars
+# Replace the example VPC, subnet, and OpenSearch SG IDs.
 
-NASA PDS packages can publish automatically using the [Roundup Action](https://github.com/NASA-PDS/roundup-action), which leverages GitHub Actions to perform automated continuous integration and continuous delivery. A default workflow that includes the Roundup is provided in the `.github/workflows/unstable-cicd.yaml` file. (Unstable here means an interim release.)
+terraform init
+terraform fmt -check
+terraform validate
 
+PLAN="tfplan.$(date +%Y%m%d.%H%M)"
+terraform plan -out="$PLAN"
+terraform show "$PLAN"
+terraform apply "$PLAN"
+```
 
-### Manual Publication
+## Destroy
 
-Create the package:
+The OpenSearch domain, VPC, subnets, and existing OpenSearch security group are
+not destroyed by this package. Terraform removes only the new ingress rule and
+the Firehose security group created here.
 
-    pip install build
-    python -m build .
-
-Publish it as a Github release.
-
-Publish on PyPI (you need a PyPI account and configure `$HOME/.pypirc`):
-
-    pip install twine
-    twine upload dist/*
-
-Or publish on the Test PyPI (you need a Test PyPI account and configure `$HOME/.pypirc`):
-
-    pip install twine
-    twine upload --repository testpypi dist/*
-
-
-## CI/CD
-
-The template repository comes with our two "standard" CI/CD workflows, `stable-cicd` and `unstable-cicd`. The unstable build runs on any push to `main` (± ignoring changes to specific files) and the stable build runs on push of a release branch of the form `release/<release version>`. Both of these make use of our GitHub actions build step, [Roundup](https://github.com/NASA-PDS/roundup-action). The `unstable-cicd` will generate (and constantly update) a SNAPSHOT release. If you haven't done a formal software release you will end up with a `v0.0.0-SNAPSHOT` release (see NASA-PDS/roundup-action#56 for specifics).
+```bash
+DESTROY_PLAN="tfplan.destroy.$(date +%Y%m%d.%H%M)"
+terraform plan -destroy -out="$DESTROY_PLAN"
+terraform apply "$DESTROY_PLAN"
+```
