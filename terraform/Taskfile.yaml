@@ -11,6 +11,14 @@
 #     reads the OpenSearch domain and security group from SSM.
 #   - brew install go-task/tap/go-task
 #   - Run `task auth` and follow the instructions to export SSO credentials.
+#
+# tfvars:
+#   By default, tfvars are read from a local cds-infra-deploy checkout:
+#     export CDS_INFRA_DEPLOY_DIR=/path/to/cds-infra-deploy
+#     task iam:plan VENUE=dev
+#   To use this repo's own (gitignored) tfvars/ dirs instead -- e.g. for personal
+#   iteration before promoting values to cds-infra-deploy -- pass LOCAL=1:
+#     task iam:plan VENUE=dev LOCAL=1
 
 ---
 
@@ -69,8 +77,19 @@ tasks:
             vars:
                 - name: VENUE
                   enum: [dev, test, prod]
+        vars:
+            TFVARS:
+                sh: |
+                    if [ "{{.LOCAL}}" = "1" ]; then
+                        echo "tfvars/{{.VENUE}}.tfvars"
+                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/cf-realtime-monitor/iam.tfvars"
+                    else
+                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
+                        exit 1
+                    fi
         cmds:
-            - terraform plan -var-file=tfvars/{{.VENUE}}.tfvars {{.CLI_ARGS}}
+            - terraform plan -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
     iam:deploy:
         desc: "Deploy IAM roles (deploy before monitor:deploy)"
@@ -81,8 +100,19 @@ tasks:
             vars:
                 - name: VENUE
                   enum: [dev, test, prod]
+        vars:
+            TFVARS:
+                sh: |
+                    if [ "{{.LOCAL}}" = "1" ]; then
+                        echo "tfvars/{{.VENUE}}.tfvars"
+                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/cf-realtime-monitor/iam.tfvars"
+                    else
+                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
+                        exit 1
+                    fi
         cmds:
-            - terraform apply -var-file=tfvars/{{.VENUE}}.tfvars {{.CLI_ARGS}}
+            - terraform apply -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
     iam:destroy:
         desc: "Destroy IAM roles (run monitor:destroy first)"
@@ -92,8 +122,19 @@ tasks:
             vars:
                 - name: VENUE
                   enum: [dev, test, prod]
+        vars:
+            TFVARS:
+                sh: |
+                    if [ "{{.LOCAL}}" = "1" ]; then
+                        echo "tfvars/{{.VENUE}}.tfvars"
+                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/cf-realtime-monitor/iam.tfvars"
+                    else
+                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
+                        exit 1
+                    fi
         cmds:
-            - terraform apply -destroy -var-file=tfvars/{{.VENUE}}.tfvars {{.CLI_ARGS}}
+            - terraform apply -destroy -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
     iam:refresh:
         desc: "Refresh IAM module Terraform state"
@@ -103,8 +144,19 @@ tasks:
             vars:
                 - name: VENUE
                   enum: [dev, test, prod]
+        vars:
+            TFVARS:
+                sh: |
+                    if [ "{{.LOCAL}}" = "1" ]; then
+                        echo "tfvars/{{.VENUE}}.tfvars"
+                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/cf-realtime-monitor/iam.tfvars"
+                    else
+                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
+                        exit 1
+                    fi
         cmds:
-            - terraform plan -refresh-only -var-file=tfvars/{{.VENUE}}.tfvars {{.CLI_ARGS}}
+            - terraform plan -refresh-only -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
     iam:sync:
         desc: "Apply refresh-only to sync IAM state without changing infrastructure"
@@ -114,8 +166,19 @@ tasks:
             vars:
                 - name: VENUE
                   enum: [dev, test, prod]
+        vars:
+            TFVARS:
+                sh: |
+                    if [ "{{.LOCAL}}" = "1" ]; then
+                        echo "tfvars/{{.VENUE}}.tfvars"
+                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/cf-realtime-monitor/iam.tfvars"
+                    else
+                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
+                        exit 1
+                    fi
         cmds:
-            - terraform apply -refresh-only -var-file=tfvars/{{.VENUE}}.tfvars {{.CLI_ARGS}}
+            - terraform apply -refresh-only -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
     iam:show:
         desc: "Show IAM module Terraform state"
@@ -156,8 +219,19 @@ tasks:
             vars:
                 - name: VENUE
                   enum: [dev, test, prod]
+        vars:
+            TFVARS:
+                sh: |
+                    if [ "{{.LOCAL}}" = "1" ]; then
+                        echo "tfvars/{{.VENUE}}.tfvars"
+                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/cf-realtime-monitor/monitor.tfvars"
+                    else
+                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
+                        exit 1
+                    fi
         cmds:
-            - terraform plan -var-file=tfvars/{{.VENUE}}.tfvars {{.CLI_ARGS}}
+            - terraform plan -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
     monitor:deploy:
         desc: "Deploy the real-time log pipeline (requires iam:deploy first)"
@@ -167,8 +241,19 @@ tasks:
             vars:
                 - name: VENUE
                   enum: [dev, test, prod]
+        vars:
+            TFVARS:
+                sh: |
+                    if [ "{{.LOCAL}}" = "1" ]; then
+                        echo "tfvars/{{.VENUE}}.tfvars"
+                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/cf-realtime-monitor/monitor.tfvars"
+                    else
+                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
+                        exit 1
+                    fi
         cmds:
-            - terraform apply -var-file=tfvars/{{.VENUE}}.tfvars {{.CLI_ARGS}}
+            - terraform apply -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
     monitor:destroy:
         desc: "Destroy the real-time log pipeline (run before iam:destroy)"
@@ -177,8 +262,19 @@ tasks:
             vars:
                 - name: VENUE
                   enum: [dev, test, prod]
+        vars:
+            TFVARS:
+                sh: |
+                    if [ "{{.LOCAL}}" = "1" ]; then
+                        echo "tfvars/{{.VENUE}}.tfvars"
+                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/cf-realtime-monitor/monitor.tfvars"
+                    else
+                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
+                        exit 1
+                    fi
         cmds:
-            - terraform apply -destroy -var-file=tfvars/{{.VENUE}}.tfvars {{.CLI_ARGS}}
+            - terraform apply -destroy -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
     monitor:refresh:
         desc: "Refresh the main module Terraform state"
@@ -187,8 +283,19 @@ tasks:
             vars:
                 - name: VENUE
                   enum: [dev, test, prod]
+        vars:
+            TFVARS:
+                sh: |
+                    if [ "{{.LOCAL}}" = "1" ]; then
+                        echo "tfvars/{{.VENUE}}.tfvars"
+                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/cf-realtime-monitor/monitor.tfvars"
+                    else
+                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
+                        exit 1
+                    fi
         cmds:
-            - terraform plan -refresh-only -var-file=tfvars/{{.VENUE}}.tfvars {{.CLI_ARGS}}
+            - terraform plan -refresh-only -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
     monitor:sync:
         desc: "Apply refresh-only to sync main module state without changing infrastructure"
@@ -197,8 +304,19 @@ tasks:
             vars:
                 - name: VENUE
                   enum: [dev, test, prod]
+        vars:
+            TFVARS:
+                sh: |
+                    if [ "{{.LOCAL}}" = "1" ]; then
+                        echo "tfvars/{{.VENUE}}.tfvars"
+                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/cf-realtime-monitor/monitor.tfvars"
+                    else
+                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
+                        exit 1
+                    fi
         cmds:
-            - terraform apply -refresh-only -var-file=tfvars/{{.VENUE}}.tfvars {{.CLI_ARGS}}
+            - terraform apply -refresh-only -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
     monitor:show:
         desc: "Show the main module Terraform state"

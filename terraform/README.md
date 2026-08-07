@@ -338,26 +338,35 @@ main module reads role ARNs from SSM.
 already be deployed too (any `realtime_monitor_enabled` value) — it's what publishes the domain
 and the SG ID the main module reads from SSM.
 
+tfvars are tracked in [`cds-infra-deploy`](https://github.com/NASA-PDS/cds-infra-deploy) at
+`venues/<venue>/cf-realtime-monitor/{iam,monitor}.tfvars`, not in this repo —
+`iam/tfvars/` and `tfvars/` here are gitignored. Point Task at a local checkout:
+
 ```bash
 cd terraform
 task auth   # follow the printed instructions to export SSO credentials
+export CDS_INFRA_DEPLOY_DIR=/path/to/cds-infra-deploy
 
 # 1. IAM (own state, deploy first)
-cp -p iam/tfvars/dev.tfvars.example iam/tfvars/dev.tfvars
-# Fill in pds_logs_bucket_arn (and any tag overrides).
-
 task iam:plan   VENUE=dev
 task iam:deploy VENUE=dev
 
 # 2. Everything else
-cp -p tfvars/dev.tfvars.example tfvars/dev.tfvars
-# Replace the example VPC and subnet IDs. No OpenSearch SG ID needed — read from SSM.
-
 task monitor:plan   VENUE=dev
 task monitor:deploy VENUE=dev
 ```
 
 Swap `VENUE=dev` for `VENUE=test` / `VENUE=prod` for other venues.
+
+For personal iteration before promoting values to `cds-infra-deploy`, pass `LOCAL=1` to use
+this repo's own (gitignored) tfvars instead:
+
+```bash
+cp -p iam/tfvars/dev.tfvars.example iam/tfvars/dev.tfvars
+cp -p tfvars/dev.tfvars.example tfvars/dev.tfvars
+task iam:plan     VENUE=dev LOCAL=1
+task monitor:plan VENUE=dev LOCAL=1
+```
 
 ### 3. Grant OpenSearch access (in pdc-observability)
 
@@ -375,7 +384,7 @@ Existing deployments predate the S3 backend. Whoever holds the current local
 ```bash
 cd terraform
 terraform init -backend-config=backend-dev.hcl -migrate-state   # answer "yes"
-terraform plan -var-file=tfvars/dev.tfvars                       # must show no changes
+terraform plan -var-file=$CDS_INFRA_DEPLOY_DIR/venues/dev/cf-realtime-monitor/monitor.tfvars   # must show no changes
 ```
 
 ## Destroy

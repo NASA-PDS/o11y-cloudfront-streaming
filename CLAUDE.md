@@ -21,10 +21,13 @@ Two root modules, each with its own state: `terraform/iam/` (execution roles, de
 tasks wrapping `terraform init/plan/apply` with the right `-backend-config` / `-var-file` per
 venue. All commands run from the `terraform/` directory.
 
+tfvars are tracked in `cds-infra-deploy` at `venues/<venue>/cf-realtime-monitor/{iam,monitor}.tfvars`,
+not in this repo. Set `CDS_INFRA_DEPLOY_DIR` to a local checkout (default), or pass `LOCAL=1` to a
+task to fall back to this repo's own gitignored `tfvars/` dirs for personal iteration.
+
 ```bash
 cd terraform
-cp -p iam/tfvars/dev.tfvars.example iam/tfvars/dev.tfvars   # fill in pds_logs_bucket_arn
-cp -p tfvars/dev.tfvars.example tfvars/dev.tfvars           # fill in vpc_id, private_subnet_ids, pds_logs_bucket_arn
+export CDS_INFRA_DEPLOY_DIR=/path/to/cds-infra-deploy
 
 task iam:deploy     VENUE=dev   # deploy first — main module reads role ARNs from SSM
 task monitor:deploy VENUE=dev
@@ -79,8 +82,9 @@ cache behaviors in the Terraform stack that owns that distribution — see READM
 note on cache-behavior precedence ordering.
 
 Resource/IAM role names, the OpenSearch domain name, and SSM parameter paths are all derived in `locals.tf` from
-`var.env` (dev/test/prod) — per-venue variable values live in `terraform/tfvars/<venue>.tfvars` and
-`terraform/iam/tfvars/<venue>.tfvars` (checked in only as `.example`, gitignored once copied).
+`var.env` (dev/test/prod) — per-venue variable values are tracked in `cds-infra-deploy` at
+`venues/<venue>/cf-realtime-monitor/{monitor,iam}.tfvars` (this repo keeps only `.example` templates
+plus gitignored local copies for `LOCAL=1` iteration; see Commands above).
 
 ### Lambda transform (`terraform/lambda/lambda_function.py`)
 
