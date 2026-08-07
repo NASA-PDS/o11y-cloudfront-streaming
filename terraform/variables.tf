@@ -79,16 +79,6 @@ variable "private_subnet_ids" {
   }
 }
 
-variable "opensearch_security_group_id" {
-  description = "ID of the existing security group attached to the OpenSearch domain."
-  type        = string
-
-  validation {
-    condition     = can(regex("^sg-[0-9a-f]+$", var.opensearch_security_group_id))
-    error_message = "opensearch_security_group_id must be a valid security group ID beginning with sg-."
-  }
-}
-
 variable "pds_logs_bucket_arn" {
   description = "ARN of the pds-logs-<env> S3 bucket where Firehose backup records are written. Output from pdc-cds-infra cloudfront/pds-main."
   type        = string

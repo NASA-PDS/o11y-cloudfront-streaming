@@ -116,18 +116,19 @@ stream, Lambda function) need these role ARNs from SSM to plan successfully.
 
 ```bash
 cd terraform/iam
-cp -p terraform.tfvars.example terraform.tfvars
+cp -p tfvars/dev.tfvars.example tfvars/dev.tfvars
 # Fill in pds_logs_bucket_arn (and any tag overrides).
 
 terraform init -backend-config=backend-dev.hcl
 terraform fmt -check
 terraform validate
 
-terraform plan  -out=tfplan.iam
+terraform plan  -var-file=tfvars/dev.tfvars -out=tfplan.iam
 terraform apply tfplan.iam
 ```
 
-Swap `backend-dev.hcl` for `backend-test.hcl` / `backend-prod.hcl` for other venues.
+Swap `backend-dev.hcl` / `tfvars/dev.tfvars` for `backend-test.hcl` / `tfvars/test.tfvars` (or
+`prod`) for other venues.
 
 ## Migrating an existing (pre-split) deployment
 
@@ -167,6 +168,6 @@ terraform state push /tmp/iam.tfstate
 #    let Terraform create it fresh.
 
 # 4. Verify both sides are clean.
-terraform plan                 # here — expect no changes
-cd .. && terraform plan        # main module — expect no changes
+terraform plan -var-file=tfvars/dev.tfvars                 # here — expect no changes
+cd .. && terraform plan -var-file=tfvars/dev.tfvars         # main module — expect no changes
 ```

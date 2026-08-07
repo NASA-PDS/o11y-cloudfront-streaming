@@ -22,6 +22,8 @@ locals {
   firehose_role_arn_ssm_parameter_name         = "/pds/monitor/firehose/firehose-role-arn"
   lambda_execution_role_arn_ssm_parameter_name = "/pds/monitor/lambda/lambda-transform-role-arn"
 
+  opensearch_security_group_id_ssm_parameter_name = "/pds/observability/opensearch/opensearch_security_group_id"
+
   cloudfront_realtime_log_fields = [
     "timestamp",
     "c-ip",

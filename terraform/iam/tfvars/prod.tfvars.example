@@ -1,0 +1,15 @@
+aws_region = "us-west-2"
+
+env = "prod"
+
+tenant    = "en"
+venue     = "pds-cds-prod"
+component = "cf-realtime-monitor"
+cicd      = "terraform"
+managedby = "vt"
+
+# Existing pds-logs-<env> bucket managed by pdc-cds-infra
+pds_logs_bucket_arn = "arn:aws:s3:::pds-logs-prod"
+
+# Prefix used by Firehose within the existing logs bucket
+pds_logs_firehose_prefix = "pdc-cds-infra/cloudfront/realtime/firehose"

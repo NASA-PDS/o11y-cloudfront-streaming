@@ -43,10 +43,14 @@ flowchart LR
 
 Deploy `iam/` first (see [`iam/README.md`](./iam/README.md)); this module reads its role ARNs
 back via `data "aws_ssm_parameter"` rather than an in-module `depends_on`. This module also needs
-the existing VPC/subnets, the OpenSearch security group, and the S3 backup bucket — supplied via
-`terraform.tfvars` (see [Inputs](#inputs) below) — and does a live `data "aws_opensearch_domain"`
-lookup against the existing `pds-<env>-observability` domain, so it cannot plan until that domain
-exists.
+the existing VPC/subnets and the S3 backup bucket — supplied via `tfvars/<venue>.tfvars` (see
+[Inputs](#inputs) below) — and does a live `data "aws_opensearch_domain"` lookup against the
+existing `pds-<env>-observability` domain (for its ARN/endpoint), so it cannot plan until that
+domain exists. The OpenSearch domain's security group ID is *not* a tfvar — it's read via
+`data "aws_ssm_parameter"` from `/pds/observability/opensearch/opensearch_security_group_id`,
+published by [pdc-observability](https://github.com/NASA-PDS/pdc-observability)'s `opensearch`
+module on every deploy. See [Existing OpenSearch domain](#existing-opensearch-domain) below for
+the one thing this doesn't get you for free: OpenSearch access.
 
 Once applied, this module outputs `cloudfront_realtime_log_config_arn`, which must be wired into
 the existing CloudFront distribution manually — this package does not own that distribution. See
@@ -93,12 +97,12 @@ No modules.
 | [aws_ssm_parameter.cloudfront_role_arn](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
 | [aws_ssm_parameter.firehose_role_arn](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
 | [aws_ssm_parameter.lambda_execution_role_arn](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
+| [aws_ssm_parameter.opensearch_security_group_id](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| <a name="input_opensearch_security_group_id"></a> [opensearch\_security\_group\_id](#input\_opensearch\_security\_group\_id) | ID of the existing security group attached to the OpenSearch domain. | `string` | n/a | yes |
 | <a name="input_pds_logs_bucket_arn"></a> [pds\_logs\_bucket\_arn](#input\_pds\_logs\_bucket\_arn) | ARN of the pds-logs-<env> S3 bucket where Firehose backup records are written. Output from pdc-cds-infra cloudfront/pds-main. | `string` | n/a | yes |
 | <a name="input_private_subnet_ids"></a> [private\_subnet\_ids](#input\_private\_subnet\_ids) | IDs of the existing private subnets Firehose will use for its VPC ENIs. | `list(string)` | n/a | yes |
 | <a name="input_vpc_id"></a> [vpc\_id](#input\_vpc\_id) | ID of the existing VPC containing the private subnets and OpenSearch domain. | `string` | n/a | yes |
@@ -218,23 +222,32 @@ The package does not create or manage the domain. It reads:
 pds-<env>-observability
 ```
 
-through `data.aws_opensearch_domain.observability`.
+through `data.aws_opensearch_domain.observability` (for ARN/endpoint) and through
+`data.aws_ssm_parameter.opensearch_security_group_id` (for the domain's security group ID, from
+`/pds/observability/opensearch/opensearch_security_group_id`) — no manual SG ID tfvar needed.
 
-The package also does not replace the domain access policy. The Terraform stack that owns the
-existing domain must add the Firehose role principal with `es:*` access to the domain ARN and
-`domain-arn/*`. This avoids overwriting existing Logstash or administrator access.
+The package also does not replace the domain access policy — the Terraform stack that owns the
+domain ([pdc-observability](https://github.com/NASA-PDS/pdc-observability)) does that itself, and
+only when told to: its `opensearch` module gates the Firehose role principal behind a
+`realtime_monitor_enabled` tfvar (default `false`), which stays `false` until this repo's `iam/`
+module has published `firehose-role-arn` to SSM. **This means a `terraform apply` here can
+succeed while Firehose still can't write to OpenSearch (403s) until someone flips that flag and
+re-applies pdc-observability** — see its `terraform/README.md#deployment-flow` for the full
+sequence. This avoids pdc-observability overwriting existing Logstash or administrator access.
 
 Fine-grained access control is unchanged and remains disabled.
 
 ## Existing network resources
 
-Supply these existing resource IDs in `terraform.tfvars`:
+Supply these existing resource IDs in `tfvars/<venue>.tfvars`:
 
 ```hcl
-vpc_id                        = "vpc-..."
-private_subnet_ids            = ["subnet-...", "subnet-..."]
-opensearch_security_group_id  = "sg-..."
+vpc_id              = "vpc-..."
+private_subnet_ids  = ["subnet-...", "subnet-..."]
 ```
+
+The OpenSearch security group ID is read from SSM (see [Existing OpenSearch
+domain](#existing-opensearch-domain) above), not supplied here.
 
 `private_subnet_ids` is used by the Firehose VPC configuration.
 
@@ -316,30 +329,45 @@ pds-cloudfront-realtime-log-transform
 
 State lives in S3 (see `backend.tf` / `backend-<venue>.hcl`) — pick a venue and initialize with
 its backend config. IAM must be deployed first since this module reads role ARNs from SSM.
+[pdc-observability](https://github.com/NASA-PDS/pdc-observability)'s `opensearch` module must
+already be deployed too (any `realtime_monitor_enabled` value) — it's what publishes the domain
+and the SG ID this module reads from SSM.
 
 ```bash
 # 1. IAM (own state, deploy first)
 cd terraform/iam
+cp -p tfvars/dev.tfvars.example tfvars/dev.tfvars
+# Fill in pds_logs_bucket_arn (and any tag overrides).
+
 terraform init -backend-config=backend-dev.hcl
-terraform plan  -out=tfplan.iam
+terraform plan  -var-file=tfvars/dev.tfvars -out=tfplan.iam
 terraform apply tfplan.iam
 
 # 2. Everything else
 cd ../
-cp -p terraform.tfvars.example terraform.tfvars
-# Replace the example VPC, subnet, and OpenSearch SG IDs.
+cp -p tfvars/dev.tfvars.example tfvars/dev.tfvars
+# Replace the example VPC and subnet IDs. No OpenSearch SG ID needed — read from SSM.
 
 terraform init -backend-config=backend-dev.hcl
 terraform fmt -check
 terraform validate
 
 PLAN="tfplan.$(date +%Y%m%d.%H%M)"
-terraform plan -out="$PLAN"
+terraform plan -var-file=tfvars/dev.tfvars -out="$PLAN"
 terraform show "$PLAN"
 terraform apply "$PLAN"
 ```
 
-Swap `backend-dev.hcl` for `backend-test.hcl` / `backend-prod.hcl` for other venues.
+Swap `backend-dev.hcl` / `tfvars/dev.tfvars` for `backend-test.hcl` / `tfvars/test.tfvars` (or
+`prod`) for other venues.
+
+### 3. Grant OpenSearch access (in pdc-observability)
+
+This module's `terraform apply` above succeeds regardless, but Firehose can't actually write to
+OpenSearch until [pdc-observability](https://github.com/NASA-PDS/pdc-observability) grants it
+access: set `realtime_monitor_enabled = true` in its `opensearch` tfvars and re-run
+`task opensearch:deploy VENUE=<venue>` there (access-policy update only, no domain
+redeployment). See its `terraform/README.md#deployment-flow` for the full cross-repo sequence.
 
 ### First-time migration from local state
 
@@ -349,7 +377,7 @@ Existing deployments predate the S3 backend. Whoever holds the current local
 ```bash
 cd terraform
 terraform init -backend-config=backend-dev.hcl -migrate-state   # answer "yes"
-terraform plan                                                   # must show no changes
+terraform plan -var-file=tfvars/dev.tfvars                       # must show no changes
 ```
 
 ## Destroy

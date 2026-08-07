@@ -19,14 +19,14 @@ All commands run from the `terraform/` directory.
 
 ```bash
 cd terraform
-cp -p terraform.tfvars.example terraform.tfvars   # fill in vpc_id, private_subnet_ids, opensearch_security_group_id, pds_logs_bucket_arn
+cp -p tfvars/dev.tfvars.example tfvars/dev.tfvars   # fill in vpc_id, private_subnet_ids, pds_logs_bucket_arn
 
-terraform init
+terraform init -backend-config=backend-dev.hcl
 terraform fmt -check
 terraform validate
 
 PLAN="tfplan.$(date +%Y%m%d.%H%M)"
-terraform plan -out="$PLAN"
+terraform plan -var-file=tfvars/dev.tfvars -out="$PLAN"
 terraform show "$PLAN"
 terraform apply "$PLAN"
 ```
@@ -80,7 +80,8 @@ cache behaviors in the Terraform stack that owns that distribution — see READM
 note on cache-behavior precedence ordering.
 
 Resource/IAM role names, the OpenSearch domain name, and SSM parameter paths are all derived in `locals.tf` from
-`var.env` (dev/test/prod) — there is no per-environment tfvars file checked in beyond the `.example`.
+`var.env` (dev/test/prod) — per-venue variable values live in `terraform/tfvars/<venue>.tfvars` and
+`terraform/iam/tfvars/<venue>.tfvars` (checked in only as `.example`, gitignored once copied).
 
 ### Lambda transform (`terraform/lambda/lambda_function.py`)
 
