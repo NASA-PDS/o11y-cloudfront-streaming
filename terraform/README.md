@@ -338,7 +338,7 @@ main module reads role ARNs from SSM.
 already be deployed too (any `realtime_monitor_enabled` value) — it's what publishes the domain
 and the SG ID the main module reads from SSM.
 
-tfvars are tracked in [`cds-infra-deploy`](https://github.com/NASA-PDS/cds-infra-deploy) at
+tfvars are tracked in the `cds-infra-deploy` repo (private GitLab, not GitHub) at
 `venues/<venue>/cf-realtime-monitor/{iam,monitor}.tfvars`, not in this repo —
 `iam/tfvars/` and `tfvars/` here are gitignored. Point Task at a local checkout:
 

@@ -116,7 +116,7 @@ stream, Lambda function) need these role ARNs from SSM to plan successfully. Dep
 by [Task](https://taskfile.dev) via the [`Taskfile.yaml`](../Taskfile.yaml) one level up — run
 `task --list` there to see everything available.
 
-tfvars are tracked in [`cds-infra-deploy`](https://github.com/NASA-PDS/cds-infra-deploy) at
+tfvars are tracked in the `cds-infra-deploy` repo (private GitLab, not GitHub) at
 `venues/<venue>/cf-realtime-monitor/iam.tfvars` — set `CDS_INFRA_DEPLOY_DIR` to a local
 checkout (see `../README.md#deploy` for the full env var / `LOCAL=1` explanation).
 
