@@ -7,7 +7,7 @@ resource "aws_cloudfront_realtime_log_config" "cloudfront_realtime" {
     stream_type = "Kinesis"
 
     kinesis_stream_config {
-      role_arn   = aws_iam_role.cloudfront_realtime_log_kinesis.arn
+      role_arn   = data.aws_ssm_parameter.cloudfront_role_arn.value
       stream_arn = aws_kinesis_stream.cloudfront_realtime.arn
     }
   }

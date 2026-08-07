@@ -39,9 +39,9 @@ variable "venue" {
 }
 
 variable "component" {
-  description = "Component tag."
+  description = "Component tag. Matches the GitHub repository name."
   type        = string
-  default     = "monitor"
+  default     = "cf-realtime-monitor"
 }
 
 variable "cicd" {

@@ -4,12 +4,12 @@ resource "aws_kinesis_firehose_delivery_stream" "cloudfront_realtime" {
 
   kinesis_source_configuration {
     kinesis_stream_arn = aws_kinesis_stream.cloudfront_realtime.arn
-    role_arn           = aws_iam_role.cloudfront_realtime_firehose.arn
+    role_arn           = data.aws_ssm_parameter.firehose_role_arn.value
   }
 
   opensearch_configuration {
     domain_arn = data.aws_opensearch_domain.observability.arn
-    role_arn   = aws_iam_role.cloudfront_realtime_firehose.arn
+    role_arn   = data.aws_ssm_parameter.firehose_role_arn.value
 
     index_name            = local.opensearch_index_name
     index_rotation_period = local.opensearch_index_rotation
@@ -21,7 +21,7 @@ resource "aws_kinesis_firehose_delivery_stream" "cloudfront_realtime" {
     s3_backup_mode = "AllDocuments"
 
     s3_configuration {
-      role_arn            = aws_iam_role.cloudfront_realtime_firehose.arn
+      role_arn            = data.aws_ssm_parameter.firehose_role_arn.value
       bucket_arn          = var.pds_logs_bucket_arn
       buffering_interval  = 300
       buffering_size      = 5
@@ -44,7 +44,7 @@ resource "aws_kinesis_firehose_delivery_stream" "cloudfront_realtime" {
     }
 
     vpc_config {
-      role_arn           = aws_iam_role.cloudfront_realtime_firehose.arn
+      role_arn           = data.aws_ssm_parameter.firehose_role_arn.value
       subnet_ids         = var.private_subnet_ids
       security_group_ids = [aws_security_group.firehose.id]
     }
@@ -58,13 +58,10 @@ resource "aws_kinesis_firehose_delivery_stream" "cloudfront_realtime" {
     }
   )
 
+  # IAM roles/policies now live in the standalone ./iam root module — deploy
+  # it first (see terraform/README.md) so the SSM lookups above resolve and
+  # the roles already have their policies attached.
   depends_on = [
-    aws_iam_role_policy.firehose_cloudwatch_logs,
-    aws_iam_role_policy.firehose_kinesis_read,
-    aws_iam_role_policy.firehose_lambda_invoke,
-    aws_iam_role_policy.firehose_opensearch_write,
-    aws_iam_role_policy.firehose_s3_backup,
-    aws_iam_role_policy.firehose_vpc_access,
     aws_vpc_security_group_egress_rule.firehose_all_ipv4,
     aws_vpc_security_group_ingress_rule.opensearch_https_from_firehose,
   ]

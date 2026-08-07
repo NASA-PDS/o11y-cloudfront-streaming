@@ -87,8 +87,8 @@ data "aws_iam_policy_document" "firehose_lambda_invoke" {
     ]
 
     resources = [
-      aws_lambda_function.cloudfront_realtime_transform.arn,
-      "${aws_lambda_function.cloudfront_realtime_transform.arn}:*"
+      local.lambda_function_arn,
+      "${local.lambda_function_arn}:*"
     ]
   }
 }
@@ -112,7 +112,7 @@ data "aws_iam_policy_document" "firehose_kinesis_read" {
       "kinesis:ListShards"
     ]
 
-    resources = [aws_kinesis_stream.cloudfront_realtime.arn]
+    resources = [local.kinesis_stream_arn]
   }
 }
 
@@ -152,8 +152,8 @@ data "aws_iam_policy_document" "firehose_opensearch_write" {
     actions = ["es:*"]
 
     resources = [
-      data.aws_opensearch_domain.observability.arn,
-      "${data.aws_opensearch_domain.observability.arn}/*"
+      local.opensearch_domain_arn,
+      "${local.opensearch_domain_arn}/*"
     ]
   }
 }

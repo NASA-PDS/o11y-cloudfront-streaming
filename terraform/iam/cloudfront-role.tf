@@ -37,7 +37,7 @@ data "aws_iam_policy_document" "cloudfront_realtime_log_kinesis" {
       "kinesis:PutRecords"
     ]
 
-    resources = [aws_kinesis_stream.cloudfront_realtime.arn]
+    resources = [local.kinesis_stream_arn]
   }
 }
 

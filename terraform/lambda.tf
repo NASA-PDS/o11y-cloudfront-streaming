@@ -13,7 +13,7 @@ resource "aws_cloudwatch_log_group" "cloudfront_realtime_transform" {
 resource "aws_lambda_function" "cloudfront_realtime_transform" {
   function_name = local.lambda_function_name
   description   = "Transforms CloudFront real-time log records from Firehose into newline-delimited JSON."
-  role          = aws_iam_role.cloudfront_realtime_log_transform.arn
+  role          = data.aws_ssm_parameter.lambda_execution_role_arn.value
 
   filename         = data.archive_file.cloudfront_realtime_transform.output_path
   source_code_hash = data.archive_file.cloudfront_realtime_transform.output_base64sha256
@@ -38,8 +38,9 @@ resource "aws_lambda_function" "cloudfront_realtime_transform" {
     }
   )
 
+  # IAM role/policy attachment now lives in the standalone ./iam root module —
+  # deploy it first (see terraform/README.md).
   depends_on = [
-    aws_iam_role_policy_attachment.lambda_basic_execution,
     aws_cloudwatch_log_group.cloudfront_realtime_transform
   ]
 }
