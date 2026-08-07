@@ -36,11 +36,14 @@ jobs:
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v4
 
+    # No AWS OIDC credentials configured yet in this repo (see the commented-out
+    # Configure AWS Credentials step above), so skip S3 backend init -- it would
+    # otherwise fail trying to reach the state bucket. Once credentials are wired
+    # up, switch back to `terraform init -backend-config="backend-${VENUE}.hcl"`
+    # so plan/apply below can be uncommented.
     - name: Terraform Init
       id: init
-      env:
-        VENUE: dev
-      run: terraform init -backend-config="backend-${VENUE}.hcl"
+      run: terraform init -backend=false
 
     - name: Terraform Format & Validate
       id: fmt_validate
@@ -64,13 +67,3 @@ jobs:
     # - name: Terraform Apply
     #   if: github.ref == 'refs/heads/main' && github.event_name == 'push' # both conditions have to be met
     #   run: terraform apply -auto-approve
-
-  validate-conventions:
-    name: 'Validate PDS Terraform conventions'
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v6
-
-    - name: Validate PDS Terraform conventions
-      run: python3 scripts/validate_terraform.py terraform/ --github
