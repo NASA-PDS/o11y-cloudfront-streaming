@@ -75,7 +75,7 @@ tasks:
     iam:deploy:
         desc: "Deploy IAM roles (deploy before monitor:deploy)"
         aliases: ["iam:apply"]
-        deps: ["iam:validate"]
+        deps: ["iam:init"]
         dir: iam
         requires:
             vars:
@@ -86,6 +86,7 @@ tasks:
 
     iam:destroy:
         desc: "Destroy IAM roles (run monitor:destroy first)"
+        deps: ["iam:init"]
         dir: iam
         requires:
             vars:
@@ -161,7 +162,7 @@ tasks:
     monitor:deploy:
         desc: "Deploy the real-time log pipeline (requires iam:deploy first)"
         aliases: ["monitor:apply"]
-        deps: ["monitor:validate"]
+        deps: ["monitor:init"]
         requires:
             vars:
                 - name: VENUE
@@ -171,6 +172,7 @@ tasks:
 
     monitor:destroy:
         desc: "Destroy the real-time log pipeline (run before iam:destroy)"
+        deps: ["monitor:init"]
         requires:
             vars:
                 - name: VENUE
