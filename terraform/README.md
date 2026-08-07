@@ -12,6 +12,47 @@ variables and referenced by convention-based names (see `locals.tf`).
 IAM roles live in the standalone [`iam/`](./iam/README.md) root module (its own state) — deploy
 it first; see [Deploy](#deploy) below.
 
+## Deployment architecture
+
+`iam/` and this module would naturally depend on each other: the IAM policies need ARNs for
+resources this module creates (the Kinesis stream, the Lambda function), while this module needs
+the role ARNs back for the CloudFront log config, Firehose, and Lambda. Every resource name here
+is a static literal (no random suffixes), so `iam/` **computes** the ARNs it needs from
+`data.aws_caller_identity` + `data.aws_partition` + the same name locals, instead of reading a
+live resource attribute. That breaks the cycle: `iam/` can apply with zero knowledge of whether
+this module's resources exist yet.
+
+```mermaid
+flowchart LR
+    subgraph iam["terraform/iam — deploy 1st"]
+        NAMES["static name locals\n(kinesis_stream_name, lambda_function_name, ...)"]
+        COMPUTE["computed ARNs\naccount_id + partition + name"]
+        ROLES["3 IAM roles + policies"]
+        NAMES --> COMPUTE --> ROLES
+        ROLES --> PUB["SSM: /pds/monitor/{cloudfront,firehose,lambda}/*-role-arn"]
+    end
+
+    subgraph main["terraform/ — deploy 2nd"]
+        SUB["data aws_ssm_parameter"]
+        RES["Kinesis stream, Lambda function,\nFirehose stream, CloudFront log config"]
+        SUB --> RES
+    end
+
+    PUB -->|"read at plan time"| SUB
+```
+
+Deploy `iam/` first (see [`iam/README.md`](./iam/README.md)); this module reads its role ARNs
+back via `data "aws_ssm_parameter"` rather than an in-module `depends_on`. This module also needs
+the existing VPC/subnets, the OpenSearch security group, and the S3 backup bucket — supplied via
+`terraform.tfvars` (see [Inputs](#inputs) below) — and does a live `data "aws_opensearch_domain"`
+lookup against the existing `pds-<env>-observability` domain, so it cannot plan until that domain
+exists.
+
+Once applied, this module outputs `cloudfront_realtime_log_config_arn`, which must be wired into
+the existing CloudFront distribution manually — this package does not own that distribution. See
+[CloudFront real-time log configuration](#cloudfront-real-time-log-configuration) below for the
+exact snippet.
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
