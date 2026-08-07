@@ -112,23 +112,21 @@ The main module reads all three back via `data "aws_ssm_parameter"`.
 ## Deploy
 
 Deploy this **before** the main module — its resources (CloudFront log config, Firehose delivery
-stream, Lambda function) need these role ARNs from SSM to plan successfully.
+stream, Lambda function) need these role ARNs from SSM to plan successfully. Deployment is driven
+by [Task](https://taskfile.dev) via the [`Taskfile.yaml`](../Taskfile.yaml) one level up — run
+`task --list` there to see everything available.
 
 ```bash
-cd terraform/iam
-cp -p tfvars/dev.tfvars.example tfvars/dev.tfvars
+cd terraform
+cp -p iam/tfvars/dev.tfvars.example iam/tfvars/dev.tfvars
 # Fill in pds_logs_bucket_arn (and any tag overrides).
 
-terraform init -backend-config=backend-dev.hcl
-terraform fmt -check
-terraform validate
-
-terraform plan  -var-file=tfvars/dev.tfvars -out=tfplan.iam
-terraform apply tfplan.iam
+task iam:validate
+task iam:plan   VENUE=dev
+task iam:deploy VENUE=dev
 ```
 
-Swap `backend-dev.hcl` / `tfvars/dev.tfvars` for `backend-test.hcl` / `tfvars/test.tfvars` (or
-`prod`) for other venues.
+Swap `VENUE=dev` for `VENUE=test` / `VENUE=prod` for other venues.
 
 ## Migrating an existing (pre-split) deployment
 
@@ -168,6 +166,7 @@ terraform state push /tmp/iam.tfstate
 #    let Terraform create it fresh.
 
 # 4. Verify both sides are clean.
-terraform plan -var-file=tfvars/dev.tfvars                 # here — expect no changes
-cd .. && terraform plan -var-file=tfvars/dev.tfvars         # main module — expect no changes
+cd ..
+task iam:plan     VENUE=dev   # expect no changes
+task monitor:plan VENUE=dev   # expect no changes
 ```

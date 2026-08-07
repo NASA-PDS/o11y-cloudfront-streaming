@@ -327,39 +327,37 @@ pds-cloudfront-realtime-log-transform
 
 ## Deploy
 
-State lives in S3 (see `backend.tf` / `backend-<venue>.hcl`) — pick a venue and initialize with
-its backend config. IAM must be deployed first since this module reads role ARNs from SSM.
+Deployment is driven by [Task](https://taskfile.dev) (`brew install go-task/tap/go-task`) via the
+[`Taskfile.yaml`](./Taskfile.yaml) in this directory — it wraps `terraform init/plan/apply` for
+both root modules (`iam:*`, `monitor:*`) with the right `-backend-config` / `-var-file` per venue.
+Run `task --list` to see everything available.
+
+State lives in S3 (see `backend.tf` / `backend-<venue>.hcl`). IAM must be deployed first since the
+main module reads role ARNs from SSM.
 [pdc-observability](https://github.com/NASA-PDS/pdc-observability)'s `opensearch` module must
 already be deployed too (any `realtime_monitor_enabled` value) — it's what publishes the domain
-and the SG ID this module reads from SSM.
+and the SG ID the main module reads from SSM.
 
 ```bash
+cd terraform
+task auth   # follow the printed instructions to export SSO credentials
+
 # 1. IAM (own state, deploy first)
-cd terraform/iam
-cp -p tfvars/dev.tfvars.example tfvars/dev.tfvars
+cp -p iam/tfvars/dev.tfvars.example iam/tfvars/dev.tfvars
 # Fill in pds_logs_bucket_arn (and any tag overrides).
 
-terraform init -backend-config=backend-dev.hcl
-terraform plan  -var-file=tfvars/dev.tfvars -out=tfplan.iam
-terraform apply tfplan.iam
+task iam:plan   VENUE=dev
+task iam:deploy VENUE=dev
 
 # 2. Everything else
-cd ../
 cp -p tfvars/dev.tfvars.example tfvars/dev.tfvars
 # Replace the example VPC and subnet IDs. No OpenSearch SG ID needed — read from SSM.
 
-terraform init -backend-config=backend-dev.hcl
-terraform fmt -check
-terraform validate
-
-PLAN="tfplan.$(date +%Y%m%d.%H%M)"
-terraform plan -var-file=tfvars/dev.tfvars -out="$PLAN"
-terraform show "$PLAN"
-terraform apply "$PLAN"
+task monitor:plan   VENUE=dev
+task monitor:deploy VENUE=dev
 ```
 
-Swap `backend-dev.hcl` / `tfvars/dev.tfvars` for `backend-test.hcl` / `tfvars/test.tfvars` (or
-`prod`) for other venues.
+Swap `VENUE=dev` for `VENUE=test` / `VENUE=prod` for other venues.
 
 ### 3. Grant OpenSearch access (in pdc-observability)
 

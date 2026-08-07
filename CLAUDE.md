@@ -15,28 +15,27 @@ unless the project is deliberately being repurposed as a Python package.
 
 ### Terraform
 
-All commands run from the `terraform/` directory.
+Two root modules, each with its own state: `terraform/iam/` (execution roles, deploy first) and
+`terraform/` (Kinesis, Firehose, Lambda, CloudFront realtime log config). Deployment is driven by
+[Task](https://taskfile.dev) via `terraform/Taskfile.yaml` — namespaced `iam:*` / `monitor:*`
+tasks wrapping `terraform init/plan/apply` with the right `-backend-config` / `-var-file` per
+venue. All commands run from the `terraform/` directory.
 
 ```bash
 cd terraform
-cp -p tfvars/dev.tfvars.example tfvars/dev.tfvars   # fill in vpc_id, private_subnet_ids, pds_logs_bucket_arn
+cp -p iam/tfvars/dev.tfvars.example iam/tfvars/dev.tfvars   # fill in pds_logs_bucket_arn
+cp -p tfvars/dev.tfvars.example tfvars/dev.tfvars           # fill in vpc_id, private_subnet_ids, pds_logs_bucket_arn
 
-terraform init -backend-config=backend-dev.hcl
-terraform fmt -check
-terraform validate
-
-PLAN="tfplan.$(date +%Y%m%d.%H%M)"
-terraform plan -var-file=tfvars/dev.tfvars -out="$PLAN"
-terraform show "$PLAN"
-terraform apply "$PLAN"
+task iam:deploy     VENUE=dev   # deploy first — main module reads role ARNs from SSM
+task monitor:deploy VENUE=dev
 ```
 
 Destroy (does not touch the OpenSearch domain, VPC, subnets, or pre-existing OpenSearch security group — only
 the resources this package created):
 
 ```bash
-terraform plan -destroy -out="tfplan.destroy.$(date +%Y%m%d.%H%M)"
-terraform apply tfplan.destroy.<timestamp>
+task monitor:destroy VENUE=dev   # destroy the pipeline before the roles it uses
+task iam:destroy     VENUE=dev
 ```
 
 CI (`.github/workflows/terraform_cicd.yaml`) runs `terraform fmt` and `terraform validate` on every push; the
