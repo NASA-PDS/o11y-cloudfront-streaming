@@ -151,16 +151,17 @@ pds-cloudfront-realtime-index-*
 
 Select `@timestamp` as the time field.
 
-## Other resource settings
+## Existing S3 backup bucket
 
-### S3 backup bucket
+Use existing S3 bucket for Firehose backup
 
 ```text
-pds-<node>-<env>-cloudfront-firehose-backup
+pds-logs-<env>
 ```
 
-Includes AES256 encryption, versioning, BucketOwnerEnforced ownership, and all
-S3 public-access blocks.
+## Other resource settings
+
+
 
 ### Kinesis stream
 
