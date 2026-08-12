@@ -65,7 +65,7 @@ No modules.
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| <a name="input_pds_logs_bucket_arn"></a> [pds\_logs\_bucket\_arn](#input\_pds\_logs\_bucket\_arn) | ARN of the pds-logs-<env> S3 bucket where Firehose backup records are written. Output from pdc-cds-infra cloudfront/pds-main. | `string` | n/a | yes |
+| <a name="input_pds_logs_bucket_arn"></a> [pds\_logs\_bucket\_arn](#input\_pds\_logs\_bucket\_arn) | ARN of the pre-existing pds-logs-<env> S3 bucket where Firehose backup records are written. | `string` | n/a | yes |
 | <a name="input_aws_region"></a> [aws\_region](#input\_aws\_region) | AWS region used by the provider and for computing service ARNs. | `string` | `"us-west-2"` | no |
 | <a name="input_cicd"></a> [cicd](#input\_cicd) | CI/CD tag. | `string` | `"terraform"` | no |
 | <a name="input_component"></a> [component](#input\_component) | Component tag. Matches the GitHub repository name. | `string` | `"cf-realtime-monitor"` | no |

@@ -80,7 +80,7 @@ variable "private_subnet_ids" {
 }
 
 variable "pds_logs_bucket_arn" {
-  description = "ARN of the pds-logs-<env> S3 bucket where Firehose backup records are written. Output from pdc-cds-infra cloudfront/pds-main."
+  description = "ARN of the pre-existing pds-logs-<env> S3 bucket where Firehose backup records are written."
   type        = string
 
 

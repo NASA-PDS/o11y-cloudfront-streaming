@@ -52,10 +52,10 @@ published by [pdc-observability](https://github.com/NASA-PDS/pdc-observability)'
 module on every deploy. See [Existing OpenSearch domain](#existing-opensearch-domain) below for
 the one thing this doesn't get you for free: OpenSearch access.
 
-Once applied, this module outputs `cloudfront_realtime_log_config_arn`, which must be wired into
-the existing CloudFront distribution manually — this package does not own that distribution. See
-[CloudFront real-time log configuration](#cloudfront-real-time-log-configuration) below for the
-exact snippet.
+Once applied, this module publishes the Kinesis stream ARN and IAM role ARNs to SSM. The
+`pdc-cds-infra/cloudfront/pds-main` module reads those SSM parameters to create the
+`aws_cloudfront_realtime_log_config` and wire it to the `/data*` and `/data/store/img*` cache
+behaviors — deploy `pds-main` after this module.
 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
@@ -81,7 +81,6 @@ No modules.
 
 | Name | Type |
 | ---- | ---- |
-| [aws_cloudfront_realtime_log_config.cloudfront_realtime](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_realtime_log_config) | resource |
 | [aws_cloudwatch_log_group.cloudfront_realtime_transform](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_log_group) | resource |
 | [aws_kinesis_firehose_delivery_stream.cloudfront_realtime](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/kinesis_firehose_delivery_stream) | resource |
 | [aws_kinesis_stream.cloudfront_realtime](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/kinesis_stream) | resource |
@@ -103,7 +102,7 @@ No modules.
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| <a name="input_pds_logs_bucket_arn"></a> [pds\_logs\_bucket\_arn](#input\_pds\_logs\_bucket\_arn) | ARN of the pds-logs-<env> S3 bucket where Firehose backup records are written. Output from pdc-cds-infra cloudfront/pds-main. | `string` | n/a | yes |
+| <a name="input_pds_logs_bucket_arn"></a> [pds\_logs\_bucket\_arn](#input\_pds\_logs\_bucket\_arn) | ARN of the pre-existing pds-logs-<env> S3 bucket where Firehose backup records are written. | `string` | n/a | yes |
 | <a name="input_private_subnet_ids"></a> [private\_subnet\_ids](#input\_private\_subnet\_ids) | IDs of the existing private subnets Firehose will use for its VPC ENIs. | `list(string)` | n/a | yes |
 | <a name="input_vpc_id"></a> [vpc\_id](#input\_vpc\_id) | ID of the existing VPC containing the private subnets and OpenSearch domain. | `string` | n/a | yes |
 | <a name="input_aws_region"></a> [aws\_region](#input\_aws\_region) | AWS region used by the provider and regional resources. | `string` | `"us-west-2"` | no |
@@ -120,8 +119,6 @@ No modules.
 
 | Name | Description |
 | ---- | ----------- |
-| <a name="output_cloudfront_realtime_log_config_arn"></a> [cloudfront\_realtime\_log\_config\_arn](#output\_cloudfront\_realtime\_log\_config\_arn) | ARN to associate with the existing CloudFront cache behaviors. |
-| <a name="output_cloudfront_realtime_log_config_name"></a> [cloudfront\_realtime\_log\_config\_name](#output\_cloudfront\_realtime\_log\_config\_name) | Name of the CloudFront real-time log configuration. |
 | <a name="output_cloudfront_realtime_log_role_arn"></a> [cloudfront\_realtime\_log\_role\_arn](#output\_cloudfront\_realtime\_log\_role\_arn) | ARN of the CloudFront real-time logging role (published by the ./iam root module, read here via SSM). |
 | <a name="output_cloudfront_role_arn_ssm_parameter_name"></a> [cloudfront\_role\_arn\_ssm\_parameter\_name](#output\_cloudfront\_role\_arn\_ssm\_parameter\_name) | SSM parameter name containing the CloudFront real-time logging IAM role ARN (published by ./iam). |
 | <a name="output_firehose_delivery_stream_arn"></a> [firehose\_delivery\_stream\_arn](#output\_firehose\_delivery\_stream\_arn) | ARN of the Firehose delivery stream sending transformed CloudFront logs to OpenSearch. |
@@ -178,41 +175,20 @@ whichever threshold is reached first.
 
 ## CloudFront real-time log configuration
 
-Terraform creates:
-
-```text
-pds-cloudfront-realtime-log-config
-```
-
-Settings:
+The `aws_cloudfront_realtime_log_config` resource is owned by
+`pdc-cds-infra/cloudfront/pds-main`, not by this module. That stack reads the Kinesis stream
+ARN from SSM (`/pds/monitor/kinesis/kinesis-stream-arn`) and the CloudFront IAM role ARN from
+SSM (`/pds/monitor/cloudfront/cloudfront-role-arn`) — both published by this module — and
+creates the log config named `pds-cloudfront-realtime-log-config` with:
 
 - Sampling rate: `100` percent
 - Destination: the Kinesis stream created by this package
 - IAM role: `pds-cloudfront-realtime-log-kinesis-role` (created by [`iam/`](./iam/README.md))
 - Fields: the 17 fields required by the Lambda transform, in the exact parsing order
 
-This package creates the real-time log configuration but does not manage the existing CloudFront
-distribution. In the Terraform stack that owns the distribution, add the configuration ARN to
-both existing ordered cache behaviors:
-
-```hcl
-ordered_cache_behavior {
-  path_pattern            = "/data*"
-  realtime_log_config_arn = <this-package-cloudfront_realtime_log_config_arn>
-
-  # Keep the existing behavior settings unchanged.
-}
-
-ordered_cache_behavior {
-  path_pattern            = "/data/store/img*"
-  realtime_log_config_arn = <this-package-cloudfront_realtime_log_config_arn>
-
-  # Keep the existing behavior settings unchanged.
-}
-```
-
-CloudFront evaluates ordered cache behaviors by precedence. Preserve the existing ordering,
-especially because `/data/store/img*` is more specific than `/data*`.
+The config is attached to the `/data*` and `/data/store/img*` ordered cache behaviors in
+`pdc-cds-infra/cloudfront/pds-main`. Deploy this module first so the SSM parameters exist
+before `pds-main` is planned.
 
 ## Existing OpenSearch domain
 
