@@ -10,7 +10,7 @@ VPC/subnets, or the S3 backup bucket — those are looked up via `data` sources 
 variables and referenced by convention-based names (see `locals.tf`).
 
 IAM roles live in the standalone [`iam/`](./iam/README.md) root module (its own state) — deploy
-it first; see [Deploy](#deploy) below.
+it first; see [Deployment flow](#deployment-flow) below.
 
 ## Deployment architecture
 
@@ -56,6 +56,58 @@ Once applied, this module publishes the Kinesis stream ARN and IAM role ARNs to 
 `pdc-cds-infra/cloudfront/pds-main` module reads those SSM parameters to create the
 `aws_cloudfront_realtime_log_config` and wire it to the `/data*` and `/data/store/img*` cache
 behaviors — deploy `pds-main` after this module.
+
+## Deployment flow
+
+Full cross-repo sequence, from a clean account to a working pipeline:
+
+```mermaid
+flowchart TD
+    subgraph p1["Phase 1 — pdc-observability"]
+        OS1["opensearch\nrealtime_monitor_enabled = false\n(~15-20 min)"]
+    end
+
+    subgraph p2["Phase 2 — cf-realtime-monitor (this repo)"]
+        CFIAM["iam/ — own state\npublishes role ARNs to SSM"]
+        CFMAIN["monitor apply\nKinesis, Lambda, Firehose\npublishes kinesis_stream_arn to SSM"]
+        CFIAM --> CFMAIN
+    end
+
+    subgraph p3["Phase 3 — pdc-observability"]
+        OS2["opensearch\nrealtime_monitor_enabled = true\n(access-policy update only, seconds)"]
+    end
+
+    subgraph p4["Phase 4 — pdc-cds-infra"]
+        CF["cloudfront/pds-main\ncreates realtime log config\nwires to /data* cache behaviors"]
+    end
+
+    OS1 -->|"opensearch SG id, endpoint → SSM"| CFMAIN
+    CFIAM -->|"firehose_role_arn → SSM"| OS2
+    CFMAIN -->|"kinesis_stream_arn,\ncloudfront_role_arn → SSM"| CF
+    OS2 -->|"access policy now allows Firehose"| CFMAIN
+```
+
+1. **(1) Bootstrap OpenSearch** — in [pdc-observability](https://github.com/NASA-PDS/pdc-observability),
+   deploy with `realtime_monitor_enabled = false`: `task opensearch:deploy VENUE=<venue>` (~15-20 min).
+   Publishes domain endpoint, ARN, and security group ID to SSM. No access policy yet — that's expected.
+2. **(2a) Deploy IAM** — `task iam:deploy VENUE=<venue>`. Publishes the three role ARNs to SSM. Can run
+   as soon as phase 1 completes; does not need the Kinesis stream or Lambda to exist yet (ARNs are
+   computed from static name locals).
+3. **(2b) Deploy main module** — `task monitor:deploy VENUE=<venue>`. Creates the Kinesis stream, Lambda,
+   and Firehose; adds its own Firehose→OpenSearch security-group ingress rule; publishes
+   `kinesis_stream_arn` to SSM. The `apply` succeeds but Firehose cannot write to OpenSearch yet — the
+   access policy from phase 1 doesn't grant it anything.
+4. **(3) Grant OpenSearch access** — back in pdc-observability, set `realtime_monitor_enabled = true`
+   in tfvars and re-run `task opensearch:deploy VENUE=<venue>`. Access-policy update only, no domain
+   redeployment. Firehose can now write.
+5. **(4) Wire CloudFront** — in `pdc-cds-infra`, deploy `cloudfront/pds-main` with
+   `enable_realtime_logging = true`. Reads the Kinesis stream ARN and CloudFront role ARN from SSM,
+   creates `pds-cloudfront-realtime-log-config`, and attaches it to the `/data*` and
+   `/data/store/img*` cache behaviors. Logs begin flowing.
+
+No manual `aws ssm put-parameter` seeding is required — each repo publishes what the next needs.
+
+---
 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
