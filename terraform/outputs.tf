@@ -84,16 +84,6 @@ output "opensearch_index_rotation" {
   value       = local.opensearch_index_rotation
 }
 
-output "cloudfront_realtime_log_config_name" {
-  description = "Name of the CloudFront real-time log configuration."
-  value       = aws_cloudfront_realtime_log_config.cloudfront_realtime.name
-}
-
-output "cloudfront_realtime_log_config_arn" {
-  description = "ARN to associate with the existing CloudFront cache behaviors."
-  value       = aws_cloudfront_realtime_log_config.cloudfront_realtime.arn
-}
-
 output "firehose_delivery_stream_name" {
   description = "Name of the Firehose delivery stream sending transformed CloudFront logs to OpenSearch."
   value       = aws_kinesis_firehose_delivery_stream.cloudfront_realtime.name
