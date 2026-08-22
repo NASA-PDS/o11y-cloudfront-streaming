@@ -4,7 +4,7 @@ env = "prod"
 
 tenant    = "en"
 venue     = "pds-cds-prod"
-component = "cf-realtime-monitor"
+component = "web-analytics-realtime"
 cicd      = "terraform"
 managedby = "vt"
 

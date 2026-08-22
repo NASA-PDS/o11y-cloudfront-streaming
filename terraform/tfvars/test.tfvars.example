@@ -6,7 +6,7 @@ env  = "test"
 
 tenant    = "en"
 venue     = "pds-cds-test"
-component = "cf-realtime-monitor"
+component = "web-analytics-realtime"
 cicd      = "terraform"
 managedby = "vt"
 
