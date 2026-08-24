@@ -17,10 +17,10 @@ locals {
   opensearch_index_name         = "pds-cloudfront-realtime-index"
   opensearch_index_rotation     = "OneDay"
 
-  kinesis_stream_arn_ssm_parameter_name        = "/pds/web-analytics-realtime/kinesis/kinesis-stream-arn"
-  cloudfront_role_arn_ssm_parameter_name       = "/pds/web-analytics-realtime/cloudfront/cloudfront-role-arn"
-  firehose_role_arn_ssm_parameter_name         = "/pds/web-analytics-realtime/firehose/firehose-role-arn"
-  lambda_execution_role_arn_ssm_parameter_name = "/pds/web-analytics-realtime/lambda/lambda-transform-role-arn"
+  kinesis_stream_arn_ssm_parameter_name        = "/pds/o11y-cloudfront-streaming/kinesis/kinesis-stream-arn"
+  cloudfront_role_arn_ssm_parameter_name       = "/pds/o11y-cloudfront-streaming/cloudfront/cloudfront-role-arn"
+  firehose_role_arn_ssm_parameter_name         = "/pds/o11y-cloudfront-streaming/firehose/firehose-role-arn"
+  lambda_execution_role_arn_ssm_parameter_name = "/pds/o11y-cloudfront-streaming/lambda/lambda-transform-role-arn"
 
   opensearch_security_group_id_ssm_parameter_name = "/pds/observability/opensearch/opensearch_security_group_id"
 

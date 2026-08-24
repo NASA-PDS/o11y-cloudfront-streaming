@@ -19,7 +19,7 @@ locals {
   lambda_function_arn   = "arn:${data.aws_partition.current.partition}:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${local.lambda_function_name}"
   opensearch_domain_arn = "arn:${data.aws_partition.current.partition}:es:${var.aws_region}:${data.aws_caller_identity.current.account_id}:domain/${local.opensearch_domain_name}"
 
-  cloudfront_role_arn_ssm_parameter_name       = "/pds/web-analytics-realtime/cloudfront/cloudfront-role-arn"
-  firehose_role_arn_ssm_parameter_name         = "/pds/web-analytics-realtime/firehose/firehose-role-arn"
-  lambda_execution_role_arn_ssm_parameter_name = "/pds/web-analytics-realtime/lambda/lambda-transform-role-arn"
+  cloudfront_role_arn_ssm_parameter_name       = "/pds/o11y-cloudfront-streaming/cloudfront/cloudfront-role-arn"
+  firehose_role_arn_ssm_parameter_name         = "/pds/o11y-cloudfront-streaming/firehose/firehose-role-arn"
+  lambda_execution_role_arn_ssm_parameter_name = "/pds/o11y-cloudfront-streaming/lambda/lambda-transform-role-arn"
 }

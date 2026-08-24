@@ -4,7 +4,7 @@ env = "dev"
 
 tenant    = "en"
 venue     = "pds-cds-dev"
-component = "web-analytics-realtime"
+component = "o11y-cloudfront-streaming"
 cicd      = "terraform"
 managedby = "vt"
 

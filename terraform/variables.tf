@@ -41,7 +41,7 @@ variable "venue" {
 variable "component" {
   description = "Component tag. Matches the GitHub repository name."
   type        = string
-  default     = "web-analytics-realtime"
+  default     = "o11y-cloudfront-streaming"
 }
 
 variable "cicd" {
