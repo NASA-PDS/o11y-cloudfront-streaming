@@ -1,6 +1,3 @@
-data "aws_caller_identity" "current" {}
-data "aws_partition" "current" {}
-
 locals {
   common_tags = {
     tenant    = var.tenant
@@ -20,9 +17,12 @@ locals {
   opensearch_index_name         = "pds-cloudfront-realtime-index"
   opensearch_index_rotation     = "OneDay"
 
-  kinesis_stream_arn_ssm_parameter_name  = "/pds/monitor/kinesis/kinesis-stream-arn"
-  cloudfront_role_arn_ssm_parameter_name = "/pds/monitor/cloudfront/cloudfront-role-arn"
-  firehose_role_arn_ssm_parameter_name   = "/pds/monitor/firehose/firehose-role-arn"
+  kinesis_stream_arn_ssm_parameter_name        = "/pds/monitor/kinesis/kinesis-stream-arn"
+  cloudfront_role_arn_ssm_parameter_name       = "/pds/monitor/cloudfront/cloudfront-role-arn"
+  firehose_role_arn_ssm_parameter_name         = "/pds/monitor/firehose/firehose-role-arn"
+  lambda_execution_role_arn_ssm_parameter_name = "/pds/monitor/lambda/lambda-transform-role-arn"
+
+  opensearch_security_group_id_ssm_parameter_name = "/pds/observability/opensearch/opensearch_security_group_id"
 
   cloudfront_realtime_log_fields = [
     "timestamp",

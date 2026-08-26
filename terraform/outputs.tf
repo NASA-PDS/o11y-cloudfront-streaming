@@ -1,16 +1,25 @@
+resource "aws_ssm_parameter" "kinesis_stream_arn" {
+  name        = local.kinesis_stream_arn_ssm_parameter_name
+  description = "ARN of the Kinesis Data Stream receiving CloudFront real-time logs."
+  type        = "String"
+  value       = aws_kinesis_stream.cloudfront_realtime.arn
+
+  tags = local.common_tags
+}
+
 output "lambda_execution_role_arn" {
-  description = "ARN of the Lambda execution role."
-  value       = aws_iam_role.cloudfront_realtime_log_transform.arn
+  description = "ARN of the Lambda execution role (published by the ./iam root module, read here via SSM)."
+  value       = data.aws_ssm_parameter.lambda_execution_role_arn.value
 }
 
 output "cloudfront_realtime_log_role_arn" {
-  description = "ARN of the CloudFront real-time logging role."
-  value       = aws_iam_role.cloudfront_realtime_log_kinesis.arn
+  description = "ARN of the CloudFront real-time logging role (published by the ./iam root module, read here via SSM)."
+  value       = data.aws_ssm_parameter.cloudfront_role_arn.value
 }
 
 output "firehose_role_arn" {
-  description = "ARN of the Firehose execution role."
-  value       = aws_iam_role.cloudfront_realtime_firehose.arn
+  description = "ARN of the Firehose execution role (published by the ./iam root module, read here via SSM)."
+  value       = data.aws_ssm_parameter.firehose_role_arn.value
 }
 
 
@@ -84,16 +93,6 @@ output "opensearch_index_rotation" {
   value       = local.opensearch_index_rotation
 }
 
-output "cloudfront_realtime_log_config_name" {
-  description = "Name of the CloudFront real-time log configuration."
-  value       = aws_cloudfront_realtime_log_config.cloudfront_realtime.name
-}
-
-output "cloudfront_realtime_log_config_arn" {
-  description = "ARN to associate with the existing CloudFront cache behaviors."
-  value       = aws_cloudfront_realtime_log_config.cloudfront_realtime.arn
-}
-
 output "firehose_delivery_stream_name" {
   description = "Name of the Firehose delivery stream sending transformed CloudFront logs to OpenSearch."
   value       = aws_kinesis_firehose_delivery_stream.cloudfront_realtime.name
@@ -110,6 +109,16 @@ output "kinesis_stream_arn_ssm_parameter_name" {
 }
 
 output "cloudfront_role_arn_ssm_parameter_name" {
-  description = "SSM parameter name containing the CloudFront real-time logging IAM role ARN."
-  value       = aws_ssm_parameter.cloudfront_role_arn.name
+  description = "SSM parameter name containing the CloudFront real-time logging IAM role ARN (published by ./iam)."
+  value       = local.cloudfront_role_arn_ssm_parameter_name
+}
+
+output "firehose_role_arn_ssm_parameter_name" {
+  description = "SSM parameter name containing the Firehose execution IAM role ARN (published by ./iam)."
+  value       = local.firehose_role_arn_ssm_parameter_name
+}
+
+output "lambda_execution_role_arn_ssm_parameter_name" {
+  description = "SSM parameter name containing the Lambda execution IAM role ARN (published by ./iam)."
+  value       = local.lambda_execution_role_arn_ssm_parameter_name
 }

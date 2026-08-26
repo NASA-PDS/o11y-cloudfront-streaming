@@ -15,28 +15,30 @@ unless the project is deliberately being repurposed as a Python package.
 
 ### Terraform
 
-All commands run from the `terraform/` directory.
+Two root modules, each with its own state: `terraform/iam/` (execution roles, deploy first) and
+`terraform/` (Kinesis, Firehose, Lambda, CloudFront realtime log config). Deployment is driven by
+[Task](https://taskfile.dev) via `terraform/Taskfile.yaml` — namespaced `iam:*` / `monitor:*`
+tasks wrapping `terraform init/plan/apply` with the right `-backend-config` / `-var-file` per
+venue. All commands run from the `terraform/` directory.
+
+tfvars are tracked in `cds-infra-deploy` at `venues/<venue>/cf-realtime-monitor/{iam,monitor}.tfvars`,
+not in this repo. Set `CDS_INFRA_DEPLOY_DIR` to a local checkout (default), or pass `LOCAL=1` to a
+task to fall back to this repo's own gitignored `tfvars/` dirs for personal iteration.
 
 ```bash
 cd terraform
-cp -p terraform.tfvars.example terraform.tfvars   # fill in vpc_id, private_subnet_ids, opensearch_security_group_id, pds_logs_bucket_arn
+export CDS_INFRA_DEPLOY_DIR=/path/to/cds-infra-deploy
 
-terraform init
-terraform fmt -check
-terraform validate
-
-PLAN="tfplan.$(date +%Y%m%d.%H%M)"
-terraform plan -out="$PLAN"
-terraform show "$PLAN"
-terraform apply "$PLAN"
+task iam:deploy     VENUE=dev   # deploy first — main module reads role ARNs from SSM
+task monitor:deploy VENUE=dev
 ```
 
 Destroy (does not touch the OpenSearch domain, VPC, subnets, or pre-existing OpenSearch security group — only
 the resources this package created):
 
 ```bash
-terraform plan -destroy -out="tfplan.destroy.$(date +%Y%m%d.%H%M)"
-terraform apply tfplan.destroy.<timestamp>
+task monitor:destroy VENUE=dev   # destroy the pipeline before the roles it uses
+task iam:destroy     VENUE=dev
 ```
 
 CI (`.github/workflows/terraform_cicd.yaml`) runs `terraform fmt` and `terraform validate` on every push; the
@@ -80,7 +82,9 @@ cache behaviors in the Terraform stack that owns that distribution — see READM
 note on cache-behavior precedence ordering.
 
 Resource/IAM role names, the OpenSearch domain name, and SSM parameter paths are all derived in `locals.tf` from
-`var.env` (dev/test/prod) — there is no per-environment tfvars file checked in beyond the `.example`.
+`var.env` (dev/test/prod) — per-venue variable values are tracked in `cds-infra-deploy` at
+`venues/<venue>/cf-realtime-monitor/{monitor,iam}.tfvars` (this repo keeps only `.example` templates
+plus gitignored local copies for `LOCAL=1` iteration; see Commands above).
 
 ### Lambda transform (`terraform/lambda/lambda_function.py`)
 
