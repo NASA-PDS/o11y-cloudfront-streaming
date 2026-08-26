@@ -1,3 +1,12 @@
+resource "aws_ssm_parameter" "firehose_security_group_id" {
+  name        = local.firehose_security_group_id_ssm_parameter_name
+  description = "ID of the Firehose security group — read by o11y-platform to create the Firehose→OpenSearch ingress rule."
+  type        = "String"
+  value       = aws_security_group.firehose.id
+
+  tags = local.common_tags
+}
+
 resource "aws_ssm_parameter" "kinesis_stream_arn" {
   name        = local.kinesis_stream_arn_ssm_parameter_name
   description = "ARN of the Kinesis Data Stream receiving CloudFront real-time logs."
@@ -101,6 +110,11 @@ output "firehose_delivery_stream_name" {
 output "firehose_delivery_stream_arn" {
   description = "ARN of the Firehose delivery stream sending transformed CloudFront logs to OpenSearch."
   value       = aws_kinesis_firehose_delivery_stream.cloudfront_realtime.arn
+}
+
+output "firehose_security_group_id_ssm_parameter_name" {
+  description = "SSM parameter name containing the Firehose security group ID (read by o11y-platform to create the Firehose→OpenSearch ingress rule)."
+  value       = local.firehose_security_group_id_ssm_parameter_name
 }
 
 output "kinesis_stream_arn_ssm_parameter_name" {

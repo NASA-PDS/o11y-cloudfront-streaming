@@ -63,6 +63,5 @@ resource "aws_kinesis_firehose_delivery_stream" "cloudfront_realtime" {
   # the roles already have their policies attached.
   depends_on = [
     aws_vpc_security_group_egress_rule.firehose_all_ipv4,
-    aws_vpc_security_group_ingress_rule.opensearch_https_from_firehose,
   ]
 }
