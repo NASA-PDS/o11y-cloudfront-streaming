@@ -3,7 +3,7 @@
 #
 # Modules and their deployment order:
 #   1. iam/      - CloudFront/Firehose/Lambda execution roles (own state, deploy first)
-#   2. (root)    - Kinesis, Firehose, Lambda transform, CloudFront realtime log config (monitor:*)
+#   2. (root)    - Kinesis, Firehose, Lambda transform, Firehose security group and ingress (monitor:*)
 #
 # Prerequisites:
 #   - pdc-observability's opensearch module must already be deployed for the target
