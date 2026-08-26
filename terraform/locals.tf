@@ -22,7 +22,7 @@ locals {
   firehose_role_arn_ssm_parameter_name         = "/pds/o11y-cloudfront-streaming/firehose/firehose-role-arn"
   lambda_execution_role_arn_ssm_parameter_name = "/pds/o11y-cloudfront-streaming/lambda/lambda-transform-role-arn"
 
-  firehose_security_group_id_ssm_parameter_name = "/pds/o11y-cloudfront-streaming/firehose/firehose-security-group-id"
+  opensearch_security_group_id_ssm_parameter_name = "/pds/o11y-platform/opensearch/opensearch_security_group_id"
 
   cloudfront_realtime_log_fields = [
     "timestamp",
