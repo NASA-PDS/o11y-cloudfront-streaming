@@ -29,7 +29,7 @@ This incremental package creates and configures:
 flowchart LR
     CF["CloudFront Distribution\n(existing, owned by pdc-cds-infra)"]
 
-    subgraph repo["cf-realtime-monitor"]
+    subgraph repo["o11y-cloudfront-streaming"]
         RLC["Realtime Log Config"]
         KIN["Kinesis Data Stream"]
         FH["Firehose Delivery Stream"]
@@ -42,7 +42,7 @@ flowchart LR
     end
 
     VPC["VPC / Private Subnets\n(existing)"]
-    OS["OpenSearch Domain\n(pdc-observability, existing)"]
+    OS["OpenSearch Domain\n(o11y-platform, existing)"]
     S3["pds-logs-&lt;env&gt; S3 Bucket\n(pdc-cds-infra, existing)"]
 
     CF -->|"real-time log stream"| RLC
@@ -77,7 +77,7 @@ The stream:
 
 - Reads from `pds-cloudfront-realtime-kinesis-stream`
 - Invokes `pds-cloudfront-realtime-log-transform` using `$LATEST`
-- Delivers transformed records to the existing `pds-<env>-observability` domain
+- Delivers transformed records to the existing `pds-<env>-o11y` domain
 - Writes to the daily-rotated `pds-cloudfront-realtime-index` index
 - Uses the existing private subnets and `pds-cloudfront-realtime-firehose-sg`
 - Backs up all documents to the existing S3 backup bucket in GZIP format
@@ -139,10 +139,10 @@ existing ordering, especially because `/data/store/img*` is more specific than
 The package does not create or manage the domain. It reads:
 
 ```text
-pds-<env>-observability
+pds-<env>-o11y
 ```
 
-through `data.aws_opensearch_domain.observability`.
+through `data.aws_opensearch_domain.o11y`.
 
 The package also does not replace the domain access policy. The Terraform stack
 that owns the existing domain must add the Firehose role principal with

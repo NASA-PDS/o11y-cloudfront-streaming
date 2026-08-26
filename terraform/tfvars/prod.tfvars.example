@@ -11,8 +11,8 @@ cicd      = "terraform"
 managedby = "vt"
 
 # Existing networking. The OpenSearch security group ID is no longer a tfvar — it's
-# read from SSM (/pds/observability/opensearch/opensearch_security_group_id), published
-# by pdc-observability's opensearch module.
+# read from SSM (/pds/o11y-platform/opensearch/opensearch_security_group_id), published
+# by o11y-platform's opensearch module.
 vpc_id              = "vpc-0123456789abcdef0"
 private_subnet_ids  = ["subnet-0123456789abcdef0", "subnet-0fedcba9876543210"]
 

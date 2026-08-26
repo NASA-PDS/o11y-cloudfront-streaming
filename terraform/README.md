@@ -48,7 +48,7 @@ the existing VPC/subnets and the S3 backup bucket — supplied via `tfvars/<venu
 existing `pds-<env>-o11y` domain (for its ARN/endpoint), so it cannot plan until that
 domain exists. The OpenSearch domain's security group ID is *not* a tfvar — it's read via
 `data "aws_ssm_parameter"` from `/pds/o11y-platform/opensearch/opensearch_security_group_id`,
-published by [pdc-observability](https://github.com/NASA-PDS/pdc-observability)'s `opensearch`
+published by [o11y-platform](https://github.com/NASA-PDS/o11y-platform)'s `opensearch`
 module on every deploy. See [Existing OpenSearch domain](#existing-opensearch-domain) below for
 the one thing this doesn't get you for free: OpenSearch access.
 
@@ -63,7 +63,7 @@ Full cross-repo sequence, from a clean account to a working pipeline:
 
 ```mermaid
 flowchart TD
-    subgraph p1["Phase 1 — pdc-observability"]
+    subgraph p1["Phase 1 — o11y-platform"]
         OS1["opensearch\nrealtime_monitor_enabled = false\n(~15-20 min)"]
     end
 
@@ -73,7 +73,7 @@ flowchart TD
         CFIAM --> CFMAIN
     end
 
-    subgraph p3["Phase 3 — pdc-observability"]
+    subgraph p3["Phase 3 — o11y-platform"]
         OS2["opensearch\nrealtime_monitor_enabled = true\n(access-policy update only, seconds)"]
     end
 
@@ -87,7 +87,7 @@ flowchart TD
     OS2 -->|"access policy now allows Firehose"| CFMAIN
 ```
 
-1. **(1) Bootstrap OpenSearch** — in [pdc-observability](https://github.com/NASA-PDS/pdc-observability),
+1. **(1) Bootstrap OpenSearch** — in [o11y-platform](https://github.com/NASA-PDS/o11y-platform),
    deploy with `realtime_monitor_enabled = false`: `task opensearch:deploy VENUE=<venue>` (~15-20 min).
    Publishes domain endpoint, ARN, and security group ID to SSM. No access policy yet — that's expected.
 2. **(2a) Deploy IAM** — `task iam:deploy VENUE=<venue>`. Publishes the three role ARNs to SSM. Can run
@@ -97,7 +97,7 @@ flowchart TD
    and Firehose; adds its own Firehose→OpenSearch security-group ingress rule; publishes
    `kinesis_stream_arn` to SSM. The `apply` succeeds but Firehose cannot write to OpenSearch yet — the
    access policy from phase 1 doesn't grant it anything.
-4. **(3) Grant OpenSearch access** — back in pdc-observability, set `realtime_monitor_enabled = true`
+4. **(3) Grant OpenSearch access** — back in o11y-platform, set `o11y_cloudfront_streaming_enabled = true`
    in tfvars and re-run `task opensearch:deploy VENUE=<venue>`. Access-policy update only, no domain
    redeployment. Firehose can now write.
 5. **(4) Wire CloudFront** — in `pdc-cds-infra`, deploy `cloudfront/pds-main` with
@@ -143,7 +143,7 @@ No modules.
 | [aws_vpc_security_group_ingress_rule.opensearch_https_from_firehose](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_ingress_rule) | resource |
 | [archive_file.cloudfront_realtime_transform](https://registry.terraform.io/providers/hashicorp/archive/latest/docs/data-sources/file) | data source |
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
-| [aws_opensearch_domain.observability](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/opensearch_domain) | data source |
+| [aws_opensearch_domain.o11y](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/opensearch_domain) | data source |
 | [aws_partition.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/partition) | data source |
 | [aws_ssm_parameter.cloudfront_role_arn](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
 | [aws_ssm_parameter.firehose_role_arn](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
@@ -250,18 +250,18 @@ The package does not create or manage the domain. It reads:
 pds-<env>-o11y
 ```
 
-through `data.aws_opensearch_domain.observability` (for ARN/endpoint) and through
+through `data.aws_opensearch_domain.o11y` (for ARN/endpoint) and through
 `data.aws_ssm_parameter.opensearch_security_group_id` (for the domain's security group ID, from
 `/pds/o11y-platform/opensearch/opensearch_security_group_id`) — no manual SG ID tfvar needed.
 
 The package also does not replace the domain access policy — the Terraform stack that owns the
-domain ([pdc-observability](https://github.com/NASA-PDS/pdc-observability)) does that itself, and
+domain ([o11y-platform](https://github.com/NASA-PDS/o11y-platform)) does that itself, and
 only when told to: its `opensearch` module gates the Firehose role principal behind a
-`realtime_monitor_enabled` tfvar (default `false`), which stays `false` until this repo's `iam/`
+`o11y_cloudfront_streaming_enabled` tfvar (default `false`), which stays `false` until this repo's `iam/`
 module has published `firehose-role-arn` to SSM. **This means a `terraform apply` here can
 succeed while Firehose still can't write to OpenSearch (403s) until someone flips that flag and
-re-applies pdc-observability** — see its `terraform/README.md#deployment-flow` for the full
-sequence. This avoids pdc-observability overwriting existing Logstash or administrator access.
+re-applies o11y-platform** — see its `terraform/README.md#deployment-flow` for the full
+sequence. This avoids o11y-platform overwriting existing Logstash or administrator access.
 
 Fine-grained access control is unchanged and remains disabled.
 
@@ -362,8 +362,8 @@ Run `task --list` to see everything available.
 
 State lives in S3 (see `backend.tf` / `backend-<venue>.hcl`). IAM must be deployed first since the
 main module reads role ARNs from SSM.
-[pdc-observability](https://github.com/NASA-PDS/pdc-observability)'s `opensearch` module must
-already be deployed too (any `realtime_monitor_enabled` value) — it's what publishes the domain
+[o11y-platform](https://github.com/NASA-PDS/o11y-platform)'s `opensearch` module must
+already be deployed too (any `o11y_cloudfront_streaming_enabled` value) — it's what publishes the domain
 and the SG ID the main module reads from SSM.
 
 tfvars are tracked in the `cds-infra-deploy` repo (private GitLab, not GitHub) at
@@ -396,11 +396,11 @@ task iam:plan     VENUE=dev LOCAL=1
 task monitor:plan VENUE=dev LOCAL=1
 ```
 
-### 3. Grant OpenSearch access (in pdc-observability)
+### 3. Grant OpenSearch access (in o11y-platform)
 
 This module's `terraform apply` above succeeds regardless, but Firehose can't actually write to
-OpenSearch until [pdc-observability](https://github.com/NASA-PDS/pdc-observability) grants it
-access: set `realtime_monitor_enabled = true` in its `opensearch` tfvars and re-run
+OpenSearch until [o11y-platform](https://github.com/NASA-PDS/o11y-platform) grants it
+access: set `o11y_cloudfront_streaming_enabled = true` in its `opensearch` tfvars and re-run
 `task opensearch:deploy VENUE=<venue>` there (access-policy update only, no domain
 redeployment). See its `terraform/README.md#deployment-flow` for the full cross-repo sequence.
 

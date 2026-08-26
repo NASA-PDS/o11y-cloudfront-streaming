@@ -21,7 +21,7 @@ Two root modules, each with its own state: `terraform/iam/` (execution roles, de
 tasks wrapping `terraform init/plan/apply` with the right `-backend-config` / `-var-file` per
 venue. All commands run from the `terraform/` directory.
 
-tfvars are tracked in `cds-infra-deploy` at `venues/<venue>/cf-realtime-monitor/{iam,monitor}.tfvars`,
+tfvars are tracked in `cds-infra-deploy` at `venues/<venue>/o11y-cloudfront-streaming/{iam,monitor}.tfvars`,
 not in this repo. Set `CDS_INFRA_DEPLOY_DIR` to a local checkout (default), or pass `LOCAL=1` to a
 task to fall back to this repo's own gitignored `tfvars/` dirs for personal iteration.
 
@@ -67,7 +67,7 @@ CloudFront (existing distribution, /data* and /data/store/img* cache behaviors)
   -> Firehose delivery stream (destination: opensearch)
        -> Lambda transform (terraform/lambda/lambda_function.py), invoked inline via Firehose
             processing_configuration before OpenSearch delivery
-       -> OpenSearch domain (existing, data-sourced by name pds-<env>-observability;
+       -> OpenSearch domain (existing, data-sourced by name pds-<env>-o11y;
             index pds-cloudfront-realtime-index-YYYY-MM-DD, daily rotation)
        -> S3 backup (existing pds-logs-<env> bucket, GZIP, AllDocuments mode)
 ```
@@ -83,7 +83,7 @@ note on cache-behavior precedence ordering.
 
 Resource/IAM role names, the OpenSearch domain name, and SSM parameter paths are all derived in `locals.tf` from
 `var.env` (dev/test/prod) — per-venue variable values are tracked in `cds-infra-deploy` at
-`venues/<venue>/cf-realtime-monitor/{monitor,iam}.tfvars` (this repo keeps only `.example` templates
+`venues/<venue>/o11y-cloudfront-streaming/{monitor,iam}.tfvars` (this repo keeps only `.example` templates
 plus gitignored local copies for `LOCAL=1` iteration; see Commands above).
 
 ### Lambda transform (`terraform/lambda/lambda_function.py`)

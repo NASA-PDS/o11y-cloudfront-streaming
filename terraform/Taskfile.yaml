@@ -1,4 +1,4 @@
-# Taskfile for cf-realtime-monitor Terraform
+# Taskfile for o11y-cloudfront-streaming Terraform
 # ============================================
 #
 # Modules and their deployment order:
@@ -6,8 +6,8 @@
 #   2. (root)    - Kinesis, Firehose, Lambda transform, CloudFront realtime log config (monitor:*)
 #
 # Prerequisites:
-#   - pdc-observability's opensearch module must already be deployed for the target
-#     venue (any web_analytics_enabled/realtime_monitor_enabled value) -- this repo
+#   - o11y-platform's opensearch module must already be deployed for the target
+#     venue (any o11y_cloudfront_streaming_enabled value) -- this repo
 #     reads the OpenSearch domain and security group from SSM.
 #   - brew install go-task/tap/go-task
 #   - Run `task auth` and follow the instructions to export SSO credentials.
@@ -193,7 +193,7 @@ tasks:
 
     # ------------------------------------------------------------------
     # Monitor: Kinesis, Firehose, Lambda transform, CloudFront realtime log config
-    # Requires iam:deploy and pdc-observability's opensearch:deploy first -- reads
+    # Requires iam:deploy and o11y-platform's opensearch:deploy first -- reads
     # role ARNs and the OpenSearch domain/security group from SSM.
     # ------------------------------------------------------------------
 

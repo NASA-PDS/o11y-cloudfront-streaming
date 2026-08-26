@@ -99,7 +99,7 @@ apply with zero knowledge of whether the main module's resources exist yet.
 ## Publishes to SSM
 
 Role ARNs are published under the same paths this repo has always used (unchanged by this split,
-so `pdc-observability` and any other consumer are unaffected):
+so `o11y-platform` and any other consumer are unaffected):
 
 ```text
 /pds/o11y-cloudfront-streaming/cloudfront/cloudfront-role-arn

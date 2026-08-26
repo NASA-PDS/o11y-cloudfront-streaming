@@ -65,12 +65,12 @@ output "lambda_log_group_name" {
 
 output "opensearch_domain_arn" {
   description = "ARN of the existing OpenSearch domain used by Firehose."
-  value       = data.aws_opensearch_domain.observability.arn
+  value       = data.aws_opensearch_domain.o11y.arn
 }
 
 output "opensearch_domain_endpoint" {
   description = "Endpoint of the existing OpenSearch domain used by Firehose."
-  value       = data.aws_opensearch_domain.observability.endpoint
+  value       = data.aws_opensearch_domain.o11y.endpoint
 }
 
 output "firehose_security_group_id" {

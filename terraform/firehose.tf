@@ -8,7 +8,7 @@ resource "aws_kinesis_firehose_delivery_stream" "cloudfront_realtime" {
   }
 
   opensearch_configuration {
-    domain_arn = data.aws_opensearch_domain.observability.arn
+    domain_arn = data.aws_opensearch_domain.o11y.arn
     role_arn   = data.aws_ssm_parameter.firehose_role_arn.value
 
     index_name            = local.opensearch_index_name
