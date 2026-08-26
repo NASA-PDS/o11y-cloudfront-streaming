@@ -7,9 +7,9 @@ locals {
     managedby = var.managedby
   }
 
-  kinesis_stream_name    = "pds-cloudfront-realtime-kinesis-stream"
-  lambda_function_name   = "pds-cloudfront-realtime-log-transform"
-  opensearch_domain_name = "pds-${var.env}-observability"
+  kinesis_stream_name    = "pds-o11y-cloudfront-streaming-kinesis"
+  lambda_function_name   = "pds-o11y-cloudfront-streaming-transform"
+  opensearch_domain_name = "pds-${var.env}-o11y"
 
   # Every name above is a static literal (no random suffixes), so the ARNs the
   # policies below need can be computed without a live resource reference to

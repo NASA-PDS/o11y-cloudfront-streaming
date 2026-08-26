@@ -13,7 +13,7 @@ data "aws_iam_policy_document" "firehose_assume_role" {
 }
 
 resource "aws_iam_role" "cloudfront_realtime_firehose" {
-  name               = "pds-cloudfront-realtime-firehose-role"
+  name               = "pds-o11y-cloudfront-streaming-firehose-role"
   path               = "/service-role/"
   description        = "Execution role for the CloudFront real-time log Firehose delivery stream."
   assume_role_policy = data.aws_iam_policy_document.firehose_assume_role.json
@@ -49,7 +49,7 @@ data "aws_iam_policy_document" "firehose_s3_backup" {
 }
 
 resource "aws_iam_role_policy" "firehose_s3_backup" {
-  name   = "pds-cloudfront-realtime-firehose-s3-backup"
+  name   = "pds-o11y-cloudfront-streaming-firehose-s3-backup"
   role   = aws_iam_role.cloudfront_realtime_firehose.id
   policy = data.aws_iam_policy_document.firehose_s3_backup.json
 }
@@ -71,7 +71,7 @@ data "aws_iam_policy_document" "firehose_cloudwatch_logs" {
 }
 
 resource "aws_iam_role_policy" "firehose_cloudwatch_logs" {
-  name   = "pds-cloudfront-realtime-firehose-cloudwatch-logs"
+  name   = "pds-o11y-cloudfront-streaming-firehose-cw-logs"
   role   = aws_iam_role.cloudfront_realtime_firehose.id
   policy = data.aws_iam_policy_document.firehose_cloudwatch_logs.json
 }
@@ -94,7 +94,7 @@ data "aws_iam_policy_document" "firehose_lambda_invoke" {
 }
 
 resource "aws_iam_role_policy" "firehose_lambda_invoke" {
-  name   = "pds-cloudfront-realtime-firehose-lambda-invoke"
+  name   = "pds-o11y-cloudfront-streaming-firehose-lambda"
   role   = aws_iam_role.cloudfront_realtime_firehose.id
   policy = data.aws_iam_policy_document.firehose_lambda_invoke.json
 }
@@ -117,7 +117,7 @@ data "aws_iam_policy_document" "firehose_kinesis_read" {
 }
 
 resource "aws_iam_role_policy" "firehose_kinesis_read" {
-  name   = "pds-cloudfront-realtime-firehose-kinesis-read"
+  name   = "pds-o11y-cloudfront-streaming-firehose-kinesis"
   role   = aws_iam_role.cloudfront_realtime_firehose.id
   policy = data.aws_iam_policy_document.firehose_kinesis_read.json
 }
@@ -139,7 +139,7 @@ data "aws_iam_policy_document" "firehose_vpc_access" {
 }
 
 resource "aws_iam_role_policy" "firehose_vpc_access" {
-  name   = "pds-cloudfront-realtime-firehose-vpc-access"
+  name   = "pds-o11y-cloudfront-streaming-firehose-vpc"
   role   = aws_iam_role.cloudfront_realtime_firehose.id
   policy = data.aws_iam_policy_document.firehose_vpc_access.json
 }
@@ -159,7 +159,7 @@ data "aws_iam_policy_document" "firehose_opensearch_write" {
 }
 
 resource "aws_iam_role_policy" "firehose_opensearch_write" {
-  name   = "pds-cloudfront-realtime-firehose-opensearch-write"
+  name   = "pds-o11y-cloudfront-streaming-firehose-os-write"
   role   = aws_iam_role.cloudfront_realtime_firehose.id
   policy = data.aws_iam_policy_document.firehose_opensearch_write.json
 }
