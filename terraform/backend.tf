@@ -6,6 +6,6 @@
 
 terraform {
   backend "s3" {
-    key = "o11y-cloudfront-streaming/monitor.tfstate"
+    key = "o11y-cloudfront-streaming/terraform.tfstate"
   }
 }
