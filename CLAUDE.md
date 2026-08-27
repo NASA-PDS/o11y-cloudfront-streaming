@@ -68,7 +68,7 @@ CloudFront (existing distribution, /data* and /data/store/img* cache behaviors)
        -> Lambda transform (terraform/lambda/lambda_function.py), invoked inline via Firehose
             processing_configuration before OpenSearch delivery
        -> OpenSearch domain (existing, data-sourced by name pds-<env>-o11y;
-            index pds-cloudfront-realtime-index-YYYY-MM-DD, daily rotation)
+            index pds-o11y-cloudfront-streaming-index-YYYY-MM-DD, daily rotation)
        -> S3 backup (existing pds-logs-<env> bucket, GZIP, AllDocuments mode)
 ```
 
