@@ -8,13 +8,13 @@ locals {
   }
 
   s3_backup_bucket_name         = "pds-logs-${var.env}"
-  kinesis_stream_name           = "pds-o11y-cloudfront-streaming-kinesis"
-  cloudfront_realtime_log_name  = "pds-o11y-cloudfront-streaming-log-config"
-  lambda_function_name          = "pds-o11y-cloudfront-streaming-transform"
+  kinesis_stream_name           = "pds-cloudfront-realtime-kinesis-stream"
+  cloudfront_realtime_log_name  = "pds-cloudfront-realtime-log-config"
+  lambda_function_name          = "pds-cloudfront-realtime-log-transform"
   opensearch_domain_name        = "pds-${var.env}-o11y"
-  firehose_delivery_stream_name = "pds-o11y-cloudfront-streaming-firehose"
-  firehose_security_group_name  = "pds-o11y-cloudfront-streaming-firehose-sg"
-  opensearch_index_name         = "pds-o11y-cloudfront-streaming-index"
+  firehose_delivery_stream_name = "pds-cloudfront-realtime-firehose"
+  firehose_security_group_name  = "pds-cloudfront-realtime-firehose-sg"
+  opensearch_index_name         = "pds-cloudfront-realtime-index"
   opensearch_index_rotation     = "OneDay"
 
   kinesis_stream_arn_ssm_parameter_name        = "/pds/o11y-cloudfront-streaming/kinesis/kinesis-stream-arn"
