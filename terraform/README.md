@@ -250,9 +250,10 @@ The package does not create or manage the domain. It reads:
 pds-<env>-o11y
 ```
 
-through `data.aws_opensearch_domain.o11y` (for ARN/endpoint) and through
-`data.aws_ssm_parameter.opensearch_security_group_id` (for the domain's security group ID, from
-`/pds/o11y-platform/opensearch/opensearch_security_group_id`) — no manual SG ID tfvar needed.
+through `data.aws_opensearch_domain.o11y` (for ARN/endpoint). The domain security group ID is
+read from SSM (`/pds/o11y-platform/opensearch/opensearch_security_group_id`) via
+`data.aws_ssm_parameter.opensearch_security_group_id`, so no manual SG ID tfvar is needed. This
+module publishes its own Firehose security group ID as output `firehose_security_group_id`.
 
 The package also does not replace the domain access policy — the Terraform stack that owns the
 domain ([o11y-platform](https://github.com/NASA-PDS/o11y-platform)) does that itself, and
