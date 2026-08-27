@@ -64,17 +64,17 @@ Full cross-repo sequence, from a clean account to a working pipeline:
 ```mermaid
 flowchart TD
     subgraph p1["Phase 1 — o11y-platform"]
-        OS1["opensearch\nrealtime_monitor_enabled = false\n(~15-20 min)"]
+        OS1["opensearch\no11y_cloudfront_streaming_enabled = false\n(~15-20 min)"]
     end
 
     subgraph p2["Phase 2 — o11y-cloudfront-streaming (this repo)"]
         CFIAM["iam/ — own state\npublishes role ARNs to SSM"]
-        CFMAIN["monitor apply\nKinesis, Lambda, Firehose\npublishes kinesis_stream_arn to SSM"]
+        CFMAIN["streaming apply\nKinesis, Lambda, Firehose\npublishes kinesis_stream_arn to SSM"]
         CFIAM --> CFMAIN
     end
 
     subgraph p3["Phase 3 — o11y-platform"]
-        OS2["opensearch\nrealtime_monitor_enabled = true\n(access-policy update only, seconds)"]
+        OS2["opensearch\no11y_cloudfront_streaming_enabled = true\n(access-policy update only, seconds)"]
     end
 
     subgraph p4["Phase 4 — pdc-cds-infra"]
@@ -88,12 +88,12 @@ flowchart TD
 ```
 
 1. **(1) Bootstrap OpenSearch** — in [o11y-platform](https://github.com/NASA-PDS/o11y-platform),
-   deploy with `realtime_monitor_enabled = false`: `task opensearch:deploy VENUE=<venue>` (~15-20 min).
+   deploy with `o11y_cloudfront_streaming_enabled = false`: `task opensearch:deploy VENUE=<venue>` (~15-20 min).
    Publishes domain endpoint, ARN, and security group ID to SSM. No access policy yet — that's expected.
 2. **(2a) Deploy IAM** — `task iam:deploy VENUE=<venue>`. Publishes the three role ARNs to SSM. Can run
    as soon as phase 1 completes; does not need the Kinesis stream or Lambda to exist yet (ARNs are
    computed from static name locals).
-3. **(2b) Deploy main module** — `task monitor:deploy VENUE=<venue>`. Creates the Kinesis stream, Lambda,
+3. **(2b) Deploy main module** — `task streaming:deploy VENUE=<venue>`. Creates the Kinesis stream, Lambda,
    and Firehose; adds its own Firehose→OpenSearch security-group ingress rule; publishes
    `kinesis_stream_arn` to SSM. The `apply` succeeds but Firehose cannot write to OpenSearch yet — the
    access policy from phase 1 doesn't grant it anything.
@@ -358,7 +358,7 @@ pds-o11y-cloudfront-streaming-transform
 
 Deployment is driven by [Task](https://taskfile.dev) (`brew install go-task/tap/go-task`) via the
 [`Taskfile.yaml`](./Taskfile.yaml) in this directory — it wraps `terraform init/plan/apply` for
-both root modules (`iam:*`, `monitor:*`) with the right `-backend-config` / `-var-file` per venue.
+both root modules (`iam:*`, `streaming:*`) with the right `-backend-config` / `-var-file` per venue.
 Run `task --list` to see everything available.
 
 State lives in S3 (see `backend.tf` / `backend-<venue>.hcl`). IAM must be deployed first since the
@@ -368,7 +368,7 @@ already be deployed too (any `o11y_cloudfront_streaming_enabled` value) — it's
 and the SG ID the main module reads from SSM.
 
 tfvars are tracked in the `cds-infra-deploy` repo (private GitLab, not GitHub) at
-`venues/<venue>/o11y-cloudfront-streaming/{iam,monitor}.tfvars`, not in this repo —
+`venues/<venue>/o11y-cloudfront-streaming/{iam,streaming}.tfvars`, not in this repo —
 `iam/tfvars/` and `tfvars/` here are gitignored. Point Task at a local checkout:
 
 ```bash
@@ -381,8 +381,8 @@ task iam:plan   VENUE=dev
 task iam:deploy VENUE=dev
 
 # 2. Everything else
-task monitor:plan   VENUE=dev
-task monitor:deploy VENUE=dev
+task streaming:plan   VENUE=dev
+task streaming:deploy VENUE=dev
 ```
 
 Swap `VENUE=dev` for `VENUE=test` / `VENUE=prod` for other venues.
@@ -393,8 +393,8 @@ this repo's own (gitignored) tfvars instead:
 ```bash
 cp -p iam/tfvars/dev.tfvars.example iam/tfvars/dev.tfvars
 cp -p tfvars/dev.tfvars.example tfvars/dev.tfvars
-task iam:plan     VENUE=dev LOCAL=1
-task monitor:plan VENUE=dev LOCAL=1
+task iam:plan       VENUE=dev LOCAL=1
+task streaming:plan VENUE=dev LOCAL=1
 ```
 
 ### 3. Grant OpenSearch access (in o11y-platform)
@@ -413,7 +413,7 @@ Existing deployments predate the S3 backend. Whoever holds the current local
 ```bash
 cd terraform
 terraform init -backend-config=backend-dev.hcl -migrate-state   # answer "yes"
-terraform plan -var-file=$CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-streaming/monitor.tfvars   # must show no changes
+terraform plan -var-file=$CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-streaming/streaming.tfvars   # must show no changes
 ```
 
 ## Destroy

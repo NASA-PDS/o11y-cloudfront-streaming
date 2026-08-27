@@ -170,6 +170,6 @@ terraform state push /tmp/iam.tfstate
 
 # 4. Verify both sides are clean.
 cd ..
-task iam:plan     VENUE=dev   # expect no changes
-task monitor:plan VENUE=dev   # expect no changes
+task iam:plan       VENUE=dev   # expect no changes
+task streaming:plan VENUE=dev   # expect no changes
 ```
