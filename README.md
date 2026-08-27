@@ -70,16 +70,16 @@ deployment order and the full technical architecture.
 Terraform creates:
 
 ```text
-pds-cloudfront-realtime-firehose
+pds-o11y-cloudfront-streaming-firehose
 ```
 
 The stream:
 
-- Reads from `pds-cloudfront-realtime-kinesis-stream`
-- Invokes `pds-cloudfront-realtime-log-transform` using `$LATEST`
+- Reads from `pds-o11y-cloudfront-streaming-kinesis`
+- Invokes `pds-o11y-cloudfront-streaming-transform` using `$LATEST`
 - Delivers transformed records to the existing `pds-<env>-o11y` domain
-- Writes to the daily-rotated `pds-cloudfront-realtime-index` index
-- Uses the existing private subnets and `pds-cloudfront-realtime-firehose-sg`
+- Writes to the daily-rotated `pds-o11y-cloudfront-streaming-index` index
+- Uses the existing private subnets and `pds-o11y-cloudfront-streaming-firehose-sg`
 - Backs up all documents to the existing S3 backup bucket in GZIP format
 - Uses a 1 MiB OpenSearch buffer and the provider-supported 60-second interval
 - Retries OpenSearch delivery for 300 seconds
