@@ -46,11 +46,10 @@ back via `data "aws_ssm_parameter"` rather than an in-module `depends_on`. This 
 the existing VPC/subnets and the S3 backup bucket — supplied via `tfvars/<venue>.tfvars` (see
 [Inputs](#inputs) below) — and does a live `data "aws_opensearch_domain"` lookup against the
 existing `pds-<env>-o11y` domain (for its ARN/endpoint), so it cannot plan until that
-domain exists. The OpenSearch domain's security group ID is *not* a tfvar — it's read via
-`data "aws_ssm_parameter"` from `/pds/o11y-platform/opensearch/opensearch_security_group_id`,
-published by [o11y-platform](https://github.com/NASA-PDS/o11y-platform)'s `opensearch`
-module on every deploy. See [Existing OpenSearch domain](#existing-opensearch-domain) below for
-the one thing this doesn't get you for free: OpenSearch access.
+domain exists. This module does not read or manage the OpenSearch domain security-group ingress
+rule; instead, it publishes the Firehose security group ID to SSM so
+[o11y-platform](https://github.com/NASA-PDS/o11y-platform) can consume it when managing OpenSearch
+access. See [Existing OpenSearch domain](#existing-opensearch-domain) below for details.
 
 Once applied, this module publishes the Kinesis stream ARN and IAM role ARNs to SSM. The
 `pdc-cds-infra/cloudfront/pds-main` module reads those SSM parameters to create the
