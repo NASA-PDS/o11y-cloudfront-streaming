@@ -73,10 +73,11 @@ CloudFront (existing distribution, /data* and /data/store/img* cache behaviors)
 ```
 
 Key point: this package **creates** the Kinesis stream, Lambda, Firehose stream, IAM roles, the Firehose
-security group, an OpenSearch ingress rule, and the CloudFront real-time log config — but it does **not** own
-the CloudFront distribution, the OpenSearch domain, the VPC/subnets, or the S3 backup bucket. Those are looked
-up via `data` sources or passed in as variables (`vpc_id`, `private_subnet_ids`, `opensearch_security_group_id`,
-`pds_logs_bucket_arn`) and referenced by convention-based names in `locals.tf`. To wire a CloudFront distribution
+security group, and the CloudFront real-time log config — but it does **not** own the CloudFront distribution,
+the OpenSearch domain, the VPC/subnets, or the S3 backup bucket. Those are looked up via `data` sources or
+passed in as variables (`vpc_id`, `private_subnet_ids`, `pds_logs_bucket_arn`) and referenced by
+convention-based names in `locals.tf`. This module publishes the Firehose security group ID to SSM so
+`o11y-platform` can create the Firehose→OpenSearch ingress rule. To wire a CloudFront distribution
 to this config, add `realtime_log_config_arn` (the `cloudfront_realtime_log_config_arn` output) to its ordered
 cache behaviors in the Terraform stack that owns that distribution — see README.md for the exact snippet and a
 note on cache-behavior precedence ordering.

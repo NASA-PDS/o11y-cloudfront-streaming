@@ -28,6 +28,10 @@ jobs:
           tar -xzf "terraform-docs-${TERRAFORM_DOCS_VERSION}-linux-amd64.tar.gz" terraform-docs
           sudo mv terraform-docs /usr/local/bin/terraform-docs
 
-      - name: Check docs are up to date
+      - name: Check docs are up to date (root module)
+        working-directory: terraform
+        run: terraform-docs -c .terraform-docs.yml --output-check .
+
+      - name: Check docs are up to date (submodules)
         working-directory: terraform
         run: terraform-docs -c .terraform-docs.yml --recursive --recursive-path=. --recursive-include-main=false --output-check .
