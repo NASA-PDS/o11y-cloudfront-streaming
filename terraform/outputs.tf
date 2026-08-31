@@ -11,16 +11,19 @@ resource "aws_ssm_parameter" "firehose_security_group_id" {
 output "lambda_execution_role_arn" {
   description = "ARN of the Lambda execution role (published by the ./iam root module, read here via SSM)."
   value       = data.aws_ssm_parameter.lambda_execution_role_arn.value
+  sensitive   = true
 }
 
 output "cloudfront_realtime_log_role_arn" {
   description = "ARN of the CloudFront real-time logging role (published by the ./iam root module, read here via SSM)."
   value       = data.aws_ssm_parameter.cloudfront_role_arn.value
+  sensitive   = true
 }
 
 output "firehose_role_arn" {
   description = "ARN of the Firehose execution role (published by the ./iam root module, read here via SSM)."
   value       = data.aws_ssm_parameter.firehose_role_arn.value
+  sensitive   = true
 }
 
 
