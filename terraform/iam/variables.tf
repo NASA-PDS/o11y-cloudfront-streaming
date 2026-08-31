@@ -36,7 +36,7 @@ variable "component" {
 variable "cicd" {
   description = "CI/CD tag."
   type        = string
-  default     = "terraform"
+  default     = "iac"
 }
 
 variable "managedby" {
