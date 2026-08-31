@@ -7,14 +7,6 @@ resource "aws_ssm_parameter" "firehose_security_group_id" {
   tags = local.common_tags
 }
 
-resource "aws_ssm_parameter" "kinesis_stream_arn" {
-  name        = local.kinesis_stream_arn_ssm_parameter_name
-  description = "ARN of the Kinesis Data Stream receiving CloudFront real-time logs."
-  type        = "String"
-  value       = aws_kinesis_stream.cloudfront_realtime.arn
-
-  tags = local.common_tags
-}
 
 output "lambda_execution_role_arn" {
   description = "ARN of the Lambda execution role (published by the ./iam root module, read here via SSM)."
@@ -118,8 +110,8 @@ output "firehose_security_group_id_ssm_parameter_name" {
 }
 
 output "kinesis_stream_arn_ssm_parameter_name" {
-  description = "SSM parameter name containing the Kinesis Data Stream ARN."
-  value       = aws_ssm_parameter.kinesis_stream_arn.name
+  description = "SSM parameter name containing the Kinesis Data Stream ARN (published by ./iam)."
+  value       = local.kinesis_stream_arn_ssm_parameter_name
 }
 
 output "cloudfront_role_arn_ssm_parameter_name" {
