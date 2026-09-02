@@ -213,12 +213,12 @@ eval $(aws configure export-credentials --profile <your-profile> --format env)
 unset AWS_PROFILE
 
 # 1. IAM roles (Admin — iam:CreateRole, iam:AttachRolePolicy)
-terragrunt plan  --terragrunt-working-dir venues/<venue>/o11y-cloudfront-streaming/iam
-terragrunt apply --terragrunt-working-dir venues/<venue>/o11y-cloudfront-streaming/iam
+terragrunt plan  --working-dir venues/<venue>/o11y-cloudfront-streaming/iam
+terragrunt apply --working-dir venues/<venue>/o11y-cloudfront-streaming/iam
 
 # 2. Streaming resources (PowerUser)
-terragrunt plan  --terragrunt-working-dir venues/<venue>/o11y-cloudfront-streaming/streaming
-terragrunt apply --terragrunt-working-dir venues/<venue>/o11y-cloudfront-streaming/streaming
+terragrunt plan  --working-dir venues/<venue>/o11y-cloudfront-streaming/streaming
+terragrunt apply --working-dir venues/<venue>/o11y-cloudfront-streaming/streaming
 ```
 
 **Fallback (local iteration via Task — use `LOCAL=1` to read from repo-local gitignored tfvars):**

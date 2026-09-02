@@ -90,28 +90,28 @@ flowchart TD
 1. **(1) Bootstrap OpenSearch** — in [o11y-platform](https://github.com/NASA-PDS/o11y-platform),
    deploy with `o11y_cloudfront_streaming_enabled = false` (~15-20 min).
    ```bash
-   terragrunt apply --terragrunt-working-dir venues/<venue>/o11y-platform/opensearch
+   terragrunt apply --working-dir venues/<venue>/o11y-platform/opensearch
    # (or: task opensearch:deploy VENUE=<venue> from the source repo)
    ```
    Publishes domain endpoint, ARN, and security group ID to SSM. No access policy yet — that's expected.
 2. **(2a) Deploy IAM** — publishes the three role ARNs to SSM. Can run as soon as phase 1 completes;
    does not need the Kinesis stream or Lambda to exist yet (ARNs are computed from static name locals).
    ```bash
-   terragrunt apply --terragrunt-working-dir venues/<venue>/o11y-cloudfront-streaming/iam
+   terragrunt apply --working-dir venues/<venue>/o11y-cloudfront-streaming/iam
    # (or: task iam:deploy VENUE=<venue> from the source repo)
    ```
 3. **(2b) Deploy main module** — creates the Kinesis stream, Lambda, and Firehose; adds its own
    Firehose→OpenSearch security-group ingress rule; publishes `kinesis_stream_arn` to SSM. The `apply`
    succeeds but Firehose cannot write to OpenSearch yet.
    ```bash
-   terragrunt apply --terragrunt-working-dir venues/<venue>/o11y-cloudfront-streaming/streaming
+   terragrunt apply --working-dir venues/<venue>/o11y-cloudfront-streaming/streaming
    # (or: task streaming:deploy VENUE=<venue> from the source repo)
    ```
 4. **(3) Grant OpenSearch access** — back in o11y-platform, set `o11y_cloudfront_streaming_enabled = true`
    in the opensearch terragrunt inputs and re-apply. Access-policy update only, no domain redeployment.
    Firehose can now write.
    ```bash
-   terragrunt apply --terragrunt-working-dir venues/<venue>/o11y-platform/opensearch
+   terragrunt apply --working-dir venues/<venue>/o11y-platform/opensearch
    # (or: task opensearch:deploy VENUE=<venue> from the source repo)
    ```
 5. **(4) Wire CloudFront** — in `pdc-cds-infra`, deploy `cloudfront/pds-main` with
@@ -119,7 +119,7 @@ flowchart TD
    creates `pds-o11y-cloudfront-streaming-log-config`, and attaches it to the `/data*` and
    `/data/store/img*` cache behaviors. Logs begin flowing.
    ```bash
-   terragrunt apply --terragrunt-working-dir venues/<venue>/pdc-cds-infra/cloudfront/pds-main
+   terragrunt apply --working-dir venues/<venue>/pdc-cds-infra/cloudfront/pds-main
    ```
 
 No manual `aws ssm put-parameter` seeding is required — each repo publishes what the next needs.
