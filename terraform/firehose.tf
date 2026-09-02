@@ -22,7 +22,7 @@ resource "aws_kinesis_firehose_delivery_stream" "cloudfront_realtime" {
 
     s3_configuration {
       role_arn            = data.aws_ssm_parameter.firehose_role_arn.value
-      bucket_arn          = var.pds_logs_bucket_arn
+      bucket_arn          = data.aws_ssm_parameter.pds_logs_bucket_arn.value
       buffering_interval  = 300
       buffering_size      = 5
       compression_format  = "GZIP"

@@ -31,7 +31,7 @@ data "aws_iam_policy_document" "firehose_s3_backup" {
       "s3:ListBucketMultipartUploads"
     ]
 
-    resources = [var.pds_logs_bucket_arn]
+    resources = [data.aws_ssm_parameter.pds_logs_bucket_arn.value]
   }
 
   statement {
@@ -44,7 +44,7 @@ data "aws_iam_policy_document" "firehose_s3_backup" {
       "s3:GetObject"
     ]
 
-    resources = ["${var.pds_logs_bucket_arn}/${var.pds_logs_firehose_prefix}/*"]
+    resources = ["${data.aws_ssm_parameter.pds_logs_bucket_arn.value}/${var.pds_logs_firehose_prefix}/*"]
   }
 }
 

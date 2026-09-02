@@ -43,8 +43,9 @@ flowchart LR
 
 Deploy `iam/` first (see [`iam/README.md`](./iam/README.md)); this module reads its role ARNs
 back via `data "aws_ssm_parameter"` rather than an in-module `depends_on`. This module also needs
-the existing VPC/subnets and the S3 backup bucket — supplied via `tfvars/<venue>.tfvars` (see
-[Inputs](#inputs) below) — and does a live `data "aws_opensearch_domain"` lookup against the
+the existing VPC/subnets — supplied via `tfvars/<venue>.tfvars` (see [Inputs](#inputs) below). The
+S3 backup bucket ARN is read from SSM (`/pds/pdc-cds-infra/s3/pds-logs-bucket-arn`, published by
+`pdc-cds-infra/cloudfront/pds-main`). This module also does a live `data "aws_opensearch_domain"` lookup against the
 existing `pds-<env>-o11y` domain (for its ARN/endpoint), so it cannot plan until that
 domain exists. This module does not read or manage the OpenSearch domain security-group ingress
 rule; instead, it publishes the Firehose security group ID to SSM so
@@ -87,22 +88,39 @@ flowchart TD
 ```
 
 1. **(1) Bootstrap OpenSearch** — in [o11y-platform](https://github.com/NASA-PDS/o11y-platform),
-   deploy with `o11y_cloudfront_streaming_enabled = false`: `task opensearch:deploy VENUE=<venue>` (~15-20 min).
+   deploy with `o11y_cloudfront_streaming_enabled = false` (~15-20 min).
+   ```bash
+   terragrunt apply --terragrunt-working-dir venues/<venue>/o11y-platform/opensearch
+   # (or: task opensearch:deploy VENUE=<venue> from the source repo)
+   ```
    Publishes domain endpoint, ARN, and security group ID to SSM. No access policy yet — that's expected.
-2. **(2a) Deploy IAM** — `task iam:deploy VENUE=<venue>`. Publishes the three role ARNs to SSM. Can run
-   as soon as phase 1 completes; does not need the Kinesis stream or Lambda to exist yet (ARNs are
-   computed from static name locals).
-3. **(2b) Deploy main module** — `task streaming:deploy VENUE=<venue>`. Creates the Kinesis stream, Lambda,
-   and Firehose; adds its own Firehose→OpenSearch security-group ingress rule; publishes
-   `kinesis_stream_arn` to SSM. The `apply` succeeds but Firehose cannot write to OpenSearch yet — the
-   access policy from phase 1 doesn't grant it anything.
+2. **(2a) Deploy IAM** — publishes the three role ARNs to SSM. Can run as soon as phase 1 completes;
+   does not need the Kinesis stream or Lambda to exist yet (ARNs are computed from static name locals).
+   ```bash
+   terragrunt apply --terragrunt-working-dir venues/<venue>/o11y-cloudfront-streaming/iam
+   # (or: task iam:deploy VENUE=<venue> from the source repo)
+   ```
+3. **(2b) Deploy main module** — creates the Kinesis stream, Lambda, and Firehose; adds its own
+   Firehose→OpenSearch security-group ingress rule; publishes `kinesis_stream_arn` to SSM. The `apply`
+   succeeds but Firehose cannot write to OpenSearch yet.
+   ```bash
+   terragrunt apply --terragrunt-working-dir venues/<venue>/o11y-cloudfront-streaming/streaming
+   # (or: task streaming:deploy VENUE=<venue> from the source repo)
+   ```
 4. **(3) Grant OpenSearch access** — back in o11y-platform, set `o11y_cloudfront_streaming_enabled = true`
-   in tfvars and re-run `task opensearch:deploy VENUE=<venue>`. Access-policy update only, no domain
-   redeployment. Firehose can now write.
+   in the opensearch terragrunt inputs and re-apply. Access-policy update only, no domain redeployment.
+   Firehose can now write.
+   ```bash
+   terragrunt apply --terragrunt-working-dir venues/<venue>/o11y-platform/opensearch
+   # (or: task opensearch:deploy VENUE=<venue> from the source repo)
+   ```
 5. **(4) Wire CloudFront** — in `pdc-cds-infra`, deploy `cloudfront/pds-main` with
-   `enable_realtime_logging = true`. Reads the Kinesis stream ARN and CloudFront role ARN from SSM,
+   `enable_o11y_streaming = true`. Reads the Kinesis stream ARN and CloudFront role ARN from SSM,
    creates `pds-o11y-cloudfront-streaming-log-config`, and attaches it to the `/data*` and
    `/data/store/img*` cache behaviors. Logs begin flowing.
+   ```bash
+   terragrunt apply --terragrunt-working-dir venues/<venue>/pdc-cds-infra/cloudfront/pds-main
+   ```
 
 No manual `aws ssm put-parameter` seeding is required — each repo publishes what the next needs.
 
@@ -153,7 +171,6 @@ No modules.
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| <a name="input_pds_logs_bucket_arn"></a> [pds\_logs\_bucket\_arn](#input\_pds\_logs\_bucket\_arn) | ARN of the pre-existing pds-logs-<env> S3 bucket where Firehose backup records are written. | `string` | n/a | yes |
 | <a name="input_private_subnet_ids"></a> [private\_subnet\_ids](#input\_private\_subnet\_ids) | IDs of the existing private subnets Firehose will use for its VPC ENIs. | `list(string)` | n/a | yes |
 | <a name="input_vpc_id"></a> [vpc\_id](#input\_vpc\_id) | ID of the existing VPC containing the private subnets and OpenSearch domain. | `string` | n/a | yes |
 | <a name="input_aws_region"></a> [aws\_region](#input\_aws\_region) | AWS region used by the provider and regional resources. | `string` | `"us-west-2"` | no |
@@ -322,12 +339,9 @@ Select `@timestamp` as the time field.
 
 ### S3 backup bucket
 
-```text
-pds-<node>-<env>-cloudfront-firehose-backup
-```
-
-Includes AES256 encryption, versioning, BucketOwnerEnforced ownership, and all S3 public-access
-blocks.
+Firehose backs up all documents to the existing `pds-logs-<env>` bucket (managed by
+`pdc-cds-infra`). The bucket ARN is read from SSM at `/pds/pdc-cds-infra/s3/pds-logs-bucket-arn`
+— no tfvar input required.
 
 ### Kinesis stream
 
@@ -366,7 +380,7 @@ main module reads role ARNs from SSM.
 already be deployed too (any `o11y_cloudfront_streaming_enabled` value) — it's what publishes the domain
 and the SG ID the main module reads from SSM.
 
-tfvars are tracked in the `cds-infra-deploy` repo (private GitLab, not GitHub) at
+tfvars are tracked in the `cds-infra-deploy` repo (private GitHub) at
 `venues/<venue>/o11y-cloudfront-streaming/{iam,streaming}.tfvars`, not in this repo —
 `iam/tfvars/` and `tfvars/` here are gitignored. Point Task at a local checkout:
 
@@ -414,6 +428,23 @@ cd terraform
 terraform init -backend-config=backend-dev.hcl -migrate-state   # answer "yes"
 terraform plan -var-file=$CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-streaming/streaming.tfvars   # must show no changes
 ```
+
+## Upgrade
+
+Each component can be upgraded independently once the stack is fully deployed.
+
+**Lambda transform** — update `src/pds/cloudfront_transform/` and push to main. Re-apply
+`streaming/` via Terragrunt to redeploy the Lambda package. The function uses `$LATEST` — no
+versioning/alias management needed.
+
+**Kinesis stream** — on-demand scaling is automatic. Retention period and encryption settings can
+be changed with a re-apply; no stream replacement.
+
+**Firehose** — most settings (buffer size, retry seconds, index name) can be changed with a
+re-apply. Changing the delivery destination type requires destroy/recreate.
+
+**IAM roles** — changes to policy documents take effect on re-apply of `iam/`. No resource
+replacement.
 
 ## Destroy
 

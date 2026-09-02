@@ -60,6 +60,33 @@ for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
   if python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) > 0 else 1)" "$TOTAL"; then
     echo "$RESULT"
     echo "PASS: $TOTAL record(s) reached the Kinesis stream (attempt $attempt/$MAX_ATTEMPTS)."
+
+    # Phase 3: verify records reached OpenSearch index (informational — Firehose has 60s buffer)
+    echo ""
+    echo "== Checking OpenSearch index for recent records =="
+    ENDPOINT=$(aws ssm get-parameter \
+      --name /pds/o11y-platform/opensearch/opensearch_endpoint \
+      --query Parameter.Value --output text 2>/dev/null || true)
+
+    if [[ -z "$ENDPOINT" ]]; then
+      echo "  SKIP: /pds/o11y-platform/opensearch/opensearch_endpoint not found in SSM — skipping OpenSearch check."
+    else
+      INDEX_PATTERN="pds-o11y-cloudfront-streaming-index-*"
+      COUNT=$(curl -s -w "\n%{http_code}" \
+        --aws-sigv4 "aws:amz:us-west-2:es" \
+        --user "${AWS_ACCESS_KEY_ID}:${AWS_SECRET_ACCESS_KEY}" \
+        -H "x-amz-security-token: ${AWS_SESSION_TOKEN}" \
+        "https://${ENDPOINT}/${INDEX_PATTERN}/_count" | tail -2)
+      HTTP_CODE=$(echo "$COUNT" | tail -1)
+      BODY=$(echo "$COUNT" | head -1)
+      if [[ "$HTTP_CODE" == "200" ]]; then
+        DOC_COUNT=$(python3 -c "import json,sys; print(json.loads(sys.argv[1])['count'])" "$BODY" 2>/dev/null || echo "?")
+        echo "PASS: OpenSearch index $INDEX_PATTERN has $DOC_COUNT document(s)."
+      else
+        echo "INFO: OpenSearch index check returned HTTP $HTTP_CODE — index may not exist yet (Firehose buffer delay is 60s+)."
+      fi
+    fi
+
     exit 0
   fi
 
