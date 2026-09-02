@@ -30,6 +30,7 @@ output "firehose_role_arn" {
 output "s3_backup_bucket_arn" {
   description = "ARN of the existing PDS logs bucket used for Firehose backup records (read from SSM /pds/pdc-cds-infra/s3/pds-logs-bucket-arn)."
   value       = data.aws_ssm_parameter.pds_logs_bucket_arn.value
+  sensitive   = true
 }
 
 output "opensearch_domain_name" {
