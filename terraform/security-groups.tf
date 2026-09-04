@@ -16,4 +16,3 @@ resource "aws_vpc_security_group_egress_rule" "firehose_all_ipv4" {
 
   description = "Allow all outbound IPv4 traffic from Firehose ENIs."
 }
-
