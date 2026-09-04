@@ -67,6 +67,7 @@ tasks:
         desc: "Validate IAM module Terraform files"
         dir: iam
         cmds:
+            - terraform init -backend=false -no-color
             - terraform validate -no-color
 
     iam:plan:
