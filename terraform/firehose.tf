@@ -8,7 +8,7 @@ resource "aws_kinesis_firehose_delivery_stream" "cloudfront_realtime" {
   }
 
   opensearch_configuration {
-    domain_arn = data.aws_opensearch_domain.observability.arn
+    domain_arn = data.aws_opensearch_domain.o11y.arn
     role_arn   = data.aws_ssm_parameter.firehose_role_arn.value
 
     index_name            = local.opensearch_index_name
@@ -22,7 +22,7 @@ resource "aws_kinesis_firehose_delivery_stream" "cloudfront_realtime" {
 
     s3_configuration {
       role_arn            = data.aws_ssm_parameter.firehose_role_arn.value
-      bucket_arn          = var.pds_logs_bucket_arn
+      bucket_arn          = data.aws_ssm_parameter.pds_logs_bucket_arn.value
       buffering_interval  = 300
       buffering_size      = 5
       compression_format  = "GZIP"
@@ -63,6 +63,5 @@ resource "aws_kinesis_firehose_delivery_stream" "cloudfront_realtime" {
   # the roles already have their policies attached.
   depends_on = [
     aws_vpc_security_group_egress_rule.firehose_all_ipv4,
-    aws_vpc_security_group_ingress_rule.opensearch_https_from_firehose,
   ]
 }

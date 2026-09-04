@@ -3,10 +3,10 @@
 Standalone root module (own state) for the three IAM roles used by the CloudFront real-time
 logging pipeline in [`../`](../README.md):
 
-- `pds-cloudfront-realtime-log-kinesis-role` — lets CloudFront write real-time logs to Kinesis
-- `pds-cloudfront-realtime-firehose-role` — Firehose's execution role (reads Kinesis, invokes the
+- `pds-o11y-cloudfront-streaming-cf-kinesis-role` — lets CloudFront write real-time logs to Kinesis
+- `pds-o11y-cloudfront-streaming-firehose-role` — Firehose's execution role (reads Kinesis, invokes the
   transform Lambda, writes to OpenSearch, backs up to S3)
-- `pds-cloudfront-realtime-log-transform-lambda-role` — the transform Lambda's execution role
+- `pds-o11y-cloudfront-streaming-transform-role` — the transform Lambda's execution role
 
 Split out from the main module so IAM changes go through their own review/apply path (per the
 org's Terraform guidelines), separate from the pipeline resources those roles have permission to
@@ -47,6 +47,7 @@ No modules.
 | [aws_iam_role_policy_attachment.lambda_basic_execution](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
 | [aws_ssm_parameter.cloudfront_role_arn](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
 | [aws_ssm_parameter.firehose_role_arn](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
+| [aws_ssm_parameter.kinesis_stream_arn](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
 | [aws_ssm_parameter.lambda_execution_role_arn](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
 | [aws_iam_policy_document.cloudfront_assume_role](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
@@ -60,18 +61,18 @@ No modules.
 | [aws_iam_policy_document.firehose_vpc_access](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.lambda_assume_role](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_partition.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/partition) | data source |
+| [aws_ssm_parameter.pds_logs_bucket_arn](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| <a name="input_pds_logs_bucket_arn"></a> [pds\_logs\_bucket\_arn](#input\_pds\_logs\_bucket\_arn) | ARN of the pre-existing pds-logs-<env> S3 bucket where Firehose backup records are written. | `string` | n/a | yes |
+| <a name="input_managedby"></a> [managedby](#input\_managedby) | Managing organization or team tag (e.g. team email distribution list). | `string` | n/a | yes |
 | <a name="input_aws_region"></a> [aws\_region](#input\_aws\_region) | AWS region used by the provider and for computing service ARNs. | `string` | `"us-west-2"` | no |
-| <a name="input_cicd"></a> [cicd](#input\_cicd) | CI/CD tag. | `string` | `"terraform"` | no |
-| <a name="input_component"></a> [component](#input\_component) | Component tag. Matches the GitHub repository name. | `string` | `"cf-realtime-monitor"` | no |
+| <a name="input_cicd"></a> [cicd](#input\_cicd) | CI/CD tag. | `string` | `"iac"` | no |
+| <a name="input_component"></a> [component](#input\_component) | Component tag. Matches the GitHub repository name. | `string` | `"o11y-cloudfront-streaming"` | no |
 | <a name="input_env"></a> [env](#input\_env) | Deployment env. Used to derive the existing OpenSearch domain name. | `string` | `"dev"` | no |
-| <a name="input_managedby"></a> [managedby](#input\_managedby) | Managing organization or team tag. | `string` | `"viviant@jpl.caltech.edu"` | no |
-| <a name="input_pds_logs_firehose_prefix"></a> [pds\_logs\_firehose\_prefix](#input\_pds\_logs\_firehose\_prefix) | S3 prefix within pds\_logs\_bucket\_arn where Firehose backup records are written. | `string` | `"pdc-cds-infra/cloudfront/realtime/firehose"` | no |
+| <a name="input_pds_logs_firehose_prefix"></a> [pds\_logs\_firehose\_prefix](#input\_pds\_logs\_firehose\_prefix) | S3 prefix within the pds-logs-<env> bucket where Firehose backup records are written. | `string` | `"pdc-cds-infra/cloudfront/realtime/firehose"` | no |
 | <a name="input_tenant"></a> [tenant](#input\_tenant) | Tenant tag. | `string` | `"en"` | no |
 | <a name="input_venue"></a> [venue](#input\_venue) | Venue tag. | `string` | `"pds-cds-dev"` | no |
 
@@ -99,12 +100,12 @@ apply with zero knowledge of whether the main module's resources exist yet.
 ## Publishes to SSM
 
 Role ARNs are published under the same paths this repo has always used (unchanged by this split,
-so `pdc-observability` and any other consumer are unaffected):
+so `o11y-platform` and any other consumer are unaffected):
 
 ```text
-/pds/monitor/cloudfront/cloudfront-role-arn
-/pds/monitor/firehose/firehose-role-arn
-/pds/monitor/lambda/lambda-transform-role-arn      (new — previously only used in-module)
+/pds/o11y-cloudfront-streaming/cloudfront/cloudfront-role-arn
+/pds/o11y-cloudfront-streaming/firehose/firehose-role-arn
+/pds/o11y-cloudfront-streaming/lambda/lambda-transform-role-arn
 ```
 
 The main module reads all three back via `data "aws_ssm_parameter"`.
@@ -117,7 +118,7 @@ by [Task](https://taskfile.dev) via the [`Taskfile.yaml`](../Taskfile.yaml) one 
 `task --list` there to see everything available.
 
 tfvars are tracked in the `cds-infra-deploy` repo (private GitLab, not GitHub) at
-`venues/<venue>/cf-realtime-monitor/iam.tfvars` — set `CDS_INFRA_DEPLOY_DIR` to a local
+`venues/<venue>/o11y-cloudfront-streaming/iam.tfvars` — set `CDS_INFRA_DEPLOY_DIR` to a local
 checkout (see `../README.md#deploy` for the full env var / `LOCAL=1` explanation).
 
 ```bash
@@ -170,6 +171,6 @@ terraform state push /tmp/iam.tfstate
 
 # 4. Verify both sides are clean.
 cd ..
-task iam:plan     VENUE=dev   # expect no changes
-task monitor:plan VENUE=dev   # expect no changes
+task iam:plan       VENUE=dev   # expect no changes
+task streaming:plan VENUE=dev   # expect no changes
 ```

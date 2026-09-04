@@ -4,12 +4,11 @@ env = "dev"
 
 tenant    = "en"
 venue     = "pds-cds-dev"
-component = "cf-realtime-monitor"
+component = "o11y-cloudfront-streaming"
 cicd      = "terraform"
 managedby = "vt"
 
 # Existing pds-logs-<env> bucket managed by pdc-cds-infra
-pds_logs_bucket_arn = "arn:aws:s3:::pds-logs-dev"
 
 # Prefix used by Firehose within the existing logs bucket
 pds_logs_firehose_prefix = "pdc-cds-infra/cloudfront/realtime/firehose"
