@@ -7,7 +7,7 @@ resource "aws_ssm_parameter" "kinesis_stream_arn" {
   description = "ARN of the Kinesis stream for CloudFront real-time log delivery — published by iam/ so CloudFront can be configured before the stream is created."
   type        = "String"
   value       = local.kinesis_stream_arn
-  tags = local.common_tags
+  tags        = local.common_tags
 }
 
 resource "aws_ssm_parameter" "cloudfront_role_arn" {
@@ -15,8 +15,7 @@ resource "aws_ssm_parameter" "cloudfront_role_arn" {
   description = "ARN of the IAM role CloudFront uses to write real-time logs to Kinesis."
   type        = "String"
   value       = aws_iam_role.cloudfront_realtime_log_kinesis.arn
-
-  tags = local.common_tags
+  tags        = local.common_tags
 }
 
 resource "aws_ssm_parameter" "firehose_role_arn" {
@@ -24,8 +23,7 @@ resource "aws_ssm_parameter" "firehose_role_arn" {
   description = "ARN of the IAM role Firehose uses to write logs to OpenSearch."
   type        = "String"
   value       = aws_iam_role.cloudfront_realtime_firehose.arn
-
-  tags = local.common_tags
+  tags        = local.common_tags
 }
 
 resource "aws_ssm_parameter" "lambda_execution_role_arn" {
@@ -33,8 +31,7 @@ resource "aws_ssm_parameter" "lambda_execution_role_arn" {
   description = "ARN of the Lambda execution role for the CloudFront real-time log transform function."
   type        = "String"
   value       = aws_iam_role.cloudfront_realtime_log_transform.arn
-
-  tags = local.common_tags
+  tags        = local.common_tags
 }
 
 output "cloudfront_realtime_log_role_arn" {
