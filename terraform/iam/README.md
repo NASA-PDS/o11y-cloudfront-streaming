@@ -99,8 +99,8 @@ apply with zero knowledge of whether the main module's resources exist yet.
 
 ## Publishes to SSM
 
-Role ARNs are published under the same paths this repo has always used (unchanged by this split,
-so `o11y-platform` and any other consumer are unaffected):
+Role ARNs are published under the following SSM paths (renamed from the legacy `/pds/monitor/...`
+prefix as part of this rename — any consumer of the old paths must update to these new paths):
 
 ```text
 /pds/o11y-cloudfront-streaming/cloudfront/cloudfront-role-arn

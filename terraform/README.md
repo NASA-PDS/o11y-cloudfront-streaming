@@ -100,9 +100,9 @@ flowchart TD
    terragrunt apply --working-dir venues/<venue>/o11y-cloudfront-streaming/iam
    # (or: task iam:deploy VENUE=<venue> from the source repo)
    ```
-3. **(2b) Deploy main module** — creates the Kinesis stream, Lambda, and Firehose; adds its own
-   Firehose→OpenSearch security-group ingress rule; publishes `kinesis_stream_arn` to SSM. The `apply`
-   succeeds but Firehose cannot write to OpenSearch yet.
+3. **(2b) Deploy main module** — creates the Kinesis stream, Lambda, and Firehose; publishes
+   `kinesis_stream_arn` and `firehose_security_group_id` to SSM. The `apply` succeeds but Firehose
+   cannot write to OpenSearch yet — the ingress rule is managed by `o11y-platform`.
    ```bash
    terragrunt apply --working-dir venues/<venue>/o11y-cloudfront-streaming/streaming
    # (or: task streaming:deploy VENUE=<venue> from the source repo)
@@ -266,10 +266,10 @@ The package does not create or manage the domain. It reads:
 pds-<env>-o11y
 ```
 
-through `data.aws_opensearch_domain.o11y` (for ARN/endpoint). The domain security group ID is
-read from SSM (`/pds/o11y-platform/opensearch/opensearch_security_group_id`) via
-`data.aws_ssm_parameter.opensearch_security_group_id`, so no manual SG ID tfvar is needed. This
-module publishes its own Firehose security group ID as output `firehose_security_group_id`.
+through `data.aws_opensearch_domain.o11y` (for ARN/endpoint). This module does **not** read or
+manage the OpenSearch domain's security group — instead it publishes its Firehose security group ID
+to SSM (`/pds/o11y-cloudfront-streaming/firehose/firehose-security-group-id`) so that `o11y-platform`
+can create the Firehose→OpenSearch ingress rule on its own security group.
 
 The package also does not replace the domain access policy — the Terraform stack that owns the
 domain ([o11y-platform](https://github.com/NASA-PDS/o11y-platform)) does that itself, and
