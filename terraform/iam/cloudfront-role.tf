@@ -18,7 +18,7 @@ data "aws_iam_policy_document" "cloudfront_assume_role" {
 }
 
 resource "aws_iam_role" "cloudfront_realtime_log_kinesis" {
-  name               = "pds-cloudfront-realtime-log-kinesis-role"
+  name               = "pds-o11y-cloudfront-streaming-cf-kinesis-role"
   path               = "/service-role/"
   description        = "Allows CloudFront real-time logging to write records to the configured Kinesis Data Stream."
   assume_role_policy = data.aws_iam_policy_document.cloudfront_assume_role.json
@@ -42,7 +42,7 @@ data "aws_iam_policy_document" "cloudfront_realtime_log_kinesis" {
 }
 
 resource "aws_iam_role_policy" "cloudfront_realtime_log_kinesis" {
-  name   = "pds-cloudfront-realtime-log-kinesis-policy"
+  name   = "pds-o11y-cloudfront-streaming-cf-kinesis-policy"
   role   = aws_iam_role.cloudfront_realtime_log_kinesis.id
   policy = data.aws_iam_policy_document.cloudfront_realtime_log_kinesis.json
 }

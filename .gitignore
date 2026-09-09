@@ -98,6 +98,7 @@ typescript
 # OS-specific artifacts
 .DS_Store
 ._*
+.envrc
 
 # Exclusions
 !.coveragerc

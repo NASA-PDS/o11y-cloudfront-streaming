@@ -6,18 +6,15 @@ env  = "dev"
 
 tenant    = "en"
 venue     = "pds-cds-dev"
-component = "cf-realtime-monitor"
+component = "o11y-cloudfront-streaming"
 cicd      = "terraform"
 managedby = "vt"
 
-# Existing networking. The OpenSearch security group ID is no longer a tfvar — it's
-# read from SSM (/pds/observability/opensearch/opensearch_security_group_id), published
-# by pdc-observability's opensearch module.
+# Existing networking.
 vpc_id              = "vpc-0123456789abcdef0"
 private_subnet_ids  = ["subnet-0123456789abcdef0", "subnet-0fedcba9876543210"]
 
 # Existing pds-logs-<env> bucket managed by pdc-cds-infra
-pds_logs_bucket_arn = "arn:aws:s3:::pds-logs-dev"
 
 # Prefix used by Firehose within the existing logs bucket
 pds_logs_firehose_prefix = "pdc-cds-infra/cloudfront/realtime/firehose"

@@ -1,13 +1,13 @@
-# Taskfile for cf-realtime-monitor Terraform
+# Taskfile for o11y-cloudfront-streaming Terraform
 # ============================================
 #
 # Modules and their deployment order:
 #   1. iam/      - CloudFront/Firehose/Lambda execution roles (own state, deploy first)
-#   2. (root)    - Kinesis, Firehose, Lambda transform, Firehose security group and ingress (monitor:*)
+#   2. (root)    - Kinesis, Firehose, Lambda transform, CloudFront realtime log config (streaming:*)
 #
 # Prerequisites:
-#   - pdc-observability's opensearch module must already be deployed for the target
-#     venue (any web_analytics_enabled/realtime_monitor_enabled value) -- this repo
+#   - o11y-platform's opensearch module must already be deployed for the target
+#     venue (any o11y_cloudfront_streaming_enabled value) -- this repo
 #     reads the OpenSearch domain and security group from SSM.
 #   - brew install go-task/tap/go-task
 #   - Run `task auth` and follow the instructions to export SSO credentials.
@@ -49,7 +49,7 @@ tasks:
 
     # ------------------------------------------------------------------
     # IAM: CloudFront/Firehose/Lambda execution roles
-    # Deploy before monitor:* -- the main module reads role ARNs from SSM.
+    # Deploy before streaming:* -- the main module reads role ARNs from SSM.
     # ------------------------------------------------------------------
 
     iam:init:
@@ -84,7 +84,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/cf-realtime-monitor/iam.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-streaming/iam.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -93,7 +93,7 @@ tasks:
             - terraform plan -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
     iam:deploy:
-        desc: "Deploy IAM roles (deploy before monitor:deploy)"
+        desc: "Deploy IAM roles (deploy before streaming:deploy)"
         aliases: ["iam:apply"]
         deps: ["iam:init"]
         dir: iam
@@ -107,7 +107,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/cf-realtime-monitor/iam.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-streaming/iam.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -116,7 +116,7 @@ tasks:
             - terraform apply -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
     iam:destroy:
-        desc: "Destroy IAM roles (run monitor:destroy first)"
+        desc: "Destroy IAM roles (run streaming:destroy first)"
         deps: ["iam:init"]
         dir: iam
         requires:
@@ -129,7 +129,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/cf-realtime-monitor/iam.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-streaming/iam.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -151,7 +151,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/cf-realtime-monitor/iam.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-streaming/iam.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -173,7 +173,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/cf-realtime-monitor/iam.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-streaming/iam.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -193,12 +193,12 @@ tasks:
             - terraform show
 
     # ------------------------------------------------------------------
-    # Monitor: Kinesis, Firehose, Lambda transform, CloudFront realtime log config
-    # Requires iam:deploy and pdc-observability's opensearch:deploy first -- reads
+    # Streaming: Kinesis, Firehose, Lambda transform, CloudFront realtime log config
+    # Requires iam:deploy and o11y-platform's opensearch:deploy first -- reads
     # role ARNs and the OpenSearch domain/security group from SSM.
     # ------------------------------------------------------------------
 
-    monitor:init:
+    streaming:init:
         desc: "Initialize the main module Terraform"
         deps: [aws]
         requires:
@@ -208,14 +208,14 @@ tasks:
         cmds:
             - terraform init -no-color -reconfigure -backend-config=backend-{{.VENUE}}.hcl {{.CLI_ARGS}}
 
-    monitor:validate:
+    streaming:validate:
         desc: "Validate the main module Terraform files"
         cmds:
             - terraform validate -no-color
 
-    monitor:plan:
+    streaming:plan:
         desc: "Plan Kinesis/Firehose/Lambda/CloudFront log config changes"
-        deps: ["monitor:init"]
+        deps: ["streaming:init"]
         requires:
             vars:
                 - name: VENUE
@@ -226,7 +226,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/cf-realtime-monitor/monitor.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-streaming/streaming.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -234,10 +234,10 @@ tasks:
         cmds:
             - terraform plan -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
-    monitor:deploy:
+    streaming:deploy:
         desc: "Deploy the real-time log pipeline (requires iam:deploy first)"
-        aliases: ["monitor:apply"]
-        deps: ["monitor:init"]
+        aliases: ["streaming:apply"]
+        deps: ["streaming:init"]
         requires:
             vars:
                 - name: VENUE
@@ -248,7 +248,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/cf-realtime-monitor/monitor.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-streaming/streaming.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -256,9 +256,9 @@ tasks:
         cmds:
             - terraform apply -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
-    monitor:destroy:
+    streaming:destroy:
         desc: "Destroy the real-time log pipeline (run before iam:destroy)"
-        deps: ["monitor:init"]
+        deps: ["streaming:init"]
         requires:
             vars:
                 - name: VENUE
@@ -269,7 +269,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/cf-realtime-monitor/monitor.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-streaming/streaming.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -277,9 +277,9 @@ tasks:
         cmds:
             - terraform apply -destroy -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
-    monitor:refresh:
+    streaming:refresh:
         desc: "Refresh the main module Terraform state"
-        deps: ["monitor:init"]
+        deps: ["streaming:init"]
         requires:
             vars:
                 - name: VENUE
@@ -290,7 +290,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/cf-realtime-monitor/monitor.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-streaming/streaming.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -298,9 +298,9 @@ tasks:
         cmds:
             - terraform plan -refresh-only -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
-    monitor:sync:
+    streaming:sync:
         desc: "Apply refresh-only to sync main module state without changing infrastructure"
-        deps: ["monitor:init"]
+        deps: ["streaming:init"]
         requires:
             vars:
                 - name: VENUE
@@ -311,7 +311,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/cf-realtime-monitor/monitor.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-streaming/streaming.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -319,9 +319,9 @@ tasks:
         cmds:
             - terraform apply -refresh-only -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
-    monitor:show:
+    streaming:show:
         desc: "Show the main module Terraform state"
-        deps: ["monitor:init"]
+        deps: ["streaming:init"]
         requires:
             vars:
                 - name: VENUE
