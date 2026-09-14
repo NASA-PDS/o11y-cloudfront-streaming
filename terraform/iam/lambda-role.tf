@@ -12,7 +12,7 @@ data "aws_iam_policy_document" "lambda_assume_role" {
 }
 
 resource "aws_iam_role" "cloudfront_realtime_log_transform" {
-  name               = "pds-cloudfront-realtime-log-transform-lambda-role"
+  name               = "pds-o11y-cloudfront-streaming-transform-role"
   path               = "/service-role/"
   description        = "Execution role for the CloudFront real-time log transformation Lambda function."
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json

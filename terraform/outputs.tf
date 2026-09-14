@@ -1,31 +1,36 @@
-resource "aws_ssm_parameter" "kinesis_stream_arn" {
-  name        = local.kinesis_stream_arn_ssm_parameter_name
-  description = "ARN of the Kinesis Data Stream receiving CloudFront real-time logs."
+resource "aws_ssm_parameter" "firehose_security_group_id" {
+  name        = local.firehose_security_group_id_ssm_parameter_name
+  description = "ID of the Firehose security group — read by o11y-platform to create the Firehose→OpenSearch ingress rule."
   type        = "String"
-  value       = aws_kinesis_stream.cloudfront_realtime.arn
+  value       = aws_security_group.firehose.id
 
   tags = local.common_tags
 }
 
+
 output "lambda_execution_role_arn" {
   description = "ARN of the Lambda execution role (published by the ./iam root module, read here via SSM)."
   value       = data.aws_ssm_parameter.lambda_execution_role_arn.value
+  sensitive   = true
 }
 
 output "cloudfront_realtime_log_role_arn" {
   description = "ARN of the CloudFront real-time logging role (published by the ./iam root module, read here via SSM)."
   value       = data.aws_ssm_parameter.cloudfront_role_arn.value
+  sensitive   = true
 }
 
 output "firehose_role_arn" {
   description = "ARN of the Firehose execution role (published by the ./iam root module, read here via SSM)."
   value       = data.aws_ssm_parameter.firehose_role_arn.value
+  sensitive   = true
 }
 
 
 output "s3_backup_bucket_arn" {
-  description = "ARN of the existing PDS logs bucket used for Firehose backup records."
-  value       = var.pds_logs_bucket_arn
+  description = "ARN of the existing PDS logs bucket used for Firehose backup records (read from SSM /pds/pdc-cds-infra/s3/pds-logs-bucket-arn)."
+  value       = data.aws_ssm_parameter.pds_logs_bucket_arn.value
+  sensitive   = true
 }
 
 output "opensearch_domain_name" {
@@ -65,12 +70,12 @@ output "lambda_log_group_name" {
 
 output "opensearch_domain_arn" {
   description = "ARN of the existing OpenSearch domain used by Firehose."
-  value       = data.aws_opensearch_domain.observability.arn
+  value       = data.aws_opensearch_domain.o11y.arn
 }
 
 output "opensearch_domain_endpoint" {
   description = "Endpoint of the existing OpenSearch domain used by Firehose."
-  value       = data.aws_opensearch_domain.observability.endpoint
+  value       = data.aws_opensearch_domain.o11y.endpoint
 }
 
 output "firehose_security_group_id" {
@@ -103,9 +108,14 @@ output "firehose_delivery_stream_arn" {
   value       = aws_kinesis_firehose_delivery_stream.cloudfront_realtime.arn
 }
 
+output "firehose_security_group_id_ssm_parameter_name" {
+  description = "SSM parameter name containing the Firehose security group ID (read by o11y-platform to create the Firehose→OpenSearch ingress rule)."
+  value       = local.firehose_security_group_id_ssm_parameter_name
+}
+
 output "kinesis_stream_arn_ssm_parameter_name" {
-  description = "SSM parameter name containing the Kinesis Data Stream ARN."
-  value       = aws_ssm_parameter.kinesis_stream_arn.name
+  description = "SSM parameter name containing the Kinesis Data Stream ARN (published by ./iam)."
+  value       = local.kinesis_stream_arn_ssm_parameter_name
 }
 
 output "cloudfront_role_arn_ssm_parameter_name" {

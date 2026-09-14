@@ -3,6 +3,10 @@ data "aws_partition" "current" {}
 
 # IAM roles are owned by the standalone ./iam root module (its own state) and
 # consumed here via SSM rather than direct resource references.
+data "aws_ssm_parameter" "pds_logs_bucket_arn" {
+  name = "/pds/pdc-cds-infra/s3/pds-logs-bucket-arn"
+}
+
 data "aws_ssm_parameter" "cloudfront_role_arn" {
   name = local.cloudfront_role_arn_ssm_parameter_name
 }
