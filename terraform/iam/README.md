@@ -99,19 +99,9 @@ apply with zero knowledge of whether the main module's resources exist yet.
 
 ## Publishes to SSM
 
-```text
-/pds/o11y-cloudfront-streaming/cloudfront/cloudfront-role-arn
-/pds/o11y-cloudfront-streaming/firehose/firehose-role-arn
-/pds/o11y-cloudfront-streaming/lambda/lambda-transform-role-arn
-/pds/o11y-cloudfront-streaming/kinesis/kinesis-stream-arn
-```
-
-The first three are role ARNs. The main module reads all three back via `data "aws_ssm_parameter"`.
-`kinesis-stream-arn` is computed here from the static stream name; the stream itself is created by
-the main module. o11y-platform reads `firehose-role-arn`, and `pdc-cds-infra/cloudfront/pds-main`
-reads `cloudfront-role-arn`, `firehose-role-arn`, and `kinesis-stream-arn`. The full list of
-cross-repo parameters is the o11y-platform
-[SSM contract](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#ssm-contract).
+This module publishes the three role ARNs and the Kinesis stream ARN to SSM. The main module reads the
+three role ARNs back via `data "aws_ssm_parameter"`. The parameter paths, and which repos read each
+one, are in the o11y-platform [SSM contract](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#ssm-contract).
 
 ## Deploy
 

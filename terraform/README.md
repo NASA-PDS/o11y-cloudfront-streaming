@@ -32,7 +32,7 @@ flowchart LR
         COMPUTE["computed ARNs\naccount_id + partition + name"]
         ROLES["3 IAM roles + policies"]
         NAMES --> COMPUTE --> ROLES
-        ROLES --> PUB["SSM: /pds/o11y-cloudfront-streaming/{cloudfront,firehose,lambda}/*-role-arn"]
+        ROLES --> PUB["SSM: role ARNs"]
     end
 
     subgraph main["terraform/ — deploy 2nd"]
@@ -45,21 +45,11 @@ flowchart LR
 ```
 
 Deploy `iam/` first (see [`iam/README.md`](./iam/README.md)); this module reads its role ARNs
-back via `data "aws_ssm_parameter"` rather than an in-module `depends_on`. This module also needs
-the existing VPC/subnets — supplied via `tfvars/<venue>.tfvars` (see [Inputs](#inputs) below). The
-S3 backup bucket ARN is read from SSM (`/pds/pdc-cds-infra/s3/pds-logs-bucket-arn`, published by
-`pdc-cds-infra/cloudfront/pds-main`). This module also does a live `data "aws_opensearch_domain"` lookup against the
-existing `pds-<env>-o11y` domain (for its ARN/endpoint), so it cannot plan until that
-domain exists. This module does not read or manage the OpenSearch domain security-group ingress
-rule; instead, it publishes the Firehose security group ID to SSM so
-[o11y-platform](https://github.com/NASA-PDS/o11y-platform) can consume it when managing OpenSearch
-access. See [Existing OpenSearch domain](#existing-opensearch-domain) below for details.
-
-`iam/` publishes the role ARNs and the Kinesis stream ARN to SSM, and this module publishes the
-Firehose security group ID. The `pdc-cds-infra/cloudfront/pds-main` module reads the `iam/`
-parameters to create the `aws_cloudfront_realtime_log_config` and attach it to the `/data*` and
-`/data/store/img*` cache behaviors. It is deployed after this module; see
-[Deployment](#deployment).
+back via `data "aws_ssm_parameter"` rather than an in-module `depends_on`. It also needs the
+existing VPC and subnets (inputs) and does a live `data "aws_opensearch_domain"` lookup against the
+existing `pds-<env>-o11y` domain, so it cannot plan until that domain exists. The SSM parameters that
+cross repo boundaries, and which repo publishes and reads each, are in the o11y-platform
+[SSM contract](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#ssm-contract).
 
 ## Deployment
 
@@ -68,16 +58,12 @@ The cross-repo order, permission tiers, and per-phase verification are in the o1
 This stack is two phases of it. Venue inputs are in `cds-infra-deploy` at
 `venues/<venue>/o11y-cloudfront-streaming/{iam,streaming}/terragrunt.hcl`.
 
-| Module | Runbook phase | Tier | Needs | Publishes to SSM |
-|---|---|---|---|---|
-| `iam/` | [Phase 2b](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-2---iam) | Admin | o11y-platform `opensearch` (Phase 1); `/pds/pdc-cds-infra/s3/pds-logs-bucket-arn` | The role ARNs and the Kinesis stream ARN (see [`iam/README.md`](./iam/README.md#publishes-to-ssm)) |
-| This module (`streaming`) | [Phase 4](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-4---streaming) | Platform Engineer | `iam/` applied; the `pds-<env>-o11y` domain | `/pds/o11y-cloudfront-streaming/firehose/firehose-security-group-id` |
+| Module | Runbook phase |
+|---|---|
+| `iam/` | [Phase 2b](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-2---iam) |
+| This module (`streaming`) | [Phase 4](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-4---streaming) |
 
-- `apply` of this module succeeds before OpenSearch access is granted, but Firehose gets 403s until
-  o11y-platform re-applies `opensearch` with `o11y_cloudfront_streaming_enabled = true`
-  ([runbook Phase 5](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-5---grant-consumers-opensearch-access)).
-- The real-time log config is created later, by `pds-main`
-  ([runbook Phase 6](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-6---cloudfront-pds-main)).
+The runbook gives each phase's permission tier, prerequisites, and verification.
 
 ---
 
@@ -199,16 +185,9 @@ whichever threshold is reached first.
 ## CloudFront real-time log configuration
 
 The `aws_cloudfront_realtime_log_config` resource is owned by `pdc-cds-infra/cloudfront/pds-main`,
-not by this module. When `enable_o11y_streaming` is on, `pds-main` reads the Kinesis stream ARN
-(`/pds/o11y-cloudfront-streaming/kinesis/kinesis-stream-arn`) and the CloudFront role ARN
-(`/pds/o11y-cloudfront-streaming/cloudfront/cloudfront-role-arn`) from SSM, both published by
-[`iam/`](./iam/README.md). It creates `pds-cloudfront-realtime-log-config` at 100 percent sampling,
-using the role `pds-o11y-cloudfront-streaming-cf-kinesis-role`, and attaches it to the `/data*` and
-`/data/store/img*` cache behaviors. The fields it sends must match what the Lambda transform parses.
-
-The flags, inputs, and SSM parameters are documented in the pdc-cds-infra
+not by this module. Its name, flags, and inputs are documented in the pdc-cds-infra
 [o11y integration](https://github.com/NASA-PDS/pdc-cds-infra/blob/main/terraform/cloudfront/pds-main/README.md#o11y-integration)
-section.
+section. The fields it sends must match what the Lambda transform parses, in the same order.
 
 ## Existing OpenSearch domain
 
@@ -218,19 +197,10 @@ The package does not create or manage the domain. It reads:
 pds-<env>-o11y
 ```
 
-through `data.aws_opensearch_domain.o11y` (for ARN/endpoint). This module does **not** read or
-manage the OpenSearch domain's security group — instead it publishes its Firehose security group ID
-to SSM (`/pds/o11y-cloudfront-streaming/firehose/firehose-security-group-id`) so that `o11y-platform`
-can create the Firehose→OpenSearch ingress rule on its own security group.
-
-The package also does not replace the domain access policy — the Terraform stack that owns the
-domain ([o11y-platform](https://github.com/NASA-PDS/o11y-platform)) does that itself, and
-only when told to: its `opensearch` module gates the Firehose role principal behind a
-`o11y_cloudfront_streaming_enabled` tfvar (default `false`), which stays `false` until this repo's `iam/`
-module has published `firehose-role-arn` to SSM. **This means a `terraform apply` here can
-succeed while Firehose still can't write to OpenSearch (403s) until someone flips that flag and
-re-applies o11y-platform** — see its `terraform/README.md#deployment-flow` for the full
-sequence. This avoids o11y-platform overwriting existing Logstash or administrator access.
+through `data.aws_opensearch_domain.o11y` (for ARN/endpoint). This module does not manage access to
+the domain. The access policy and the Firehose-to-OpenSearch security group rule are managed by
+o11y-platform, so an `apply` here can succeed while Firehose still gets 403s; see the runbook
+[Phase 5](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-5---grant-consumers-opensearch-access).
 
 Fine-grained access control is unchanged and remains disabled.
 
@@ -285,7 +255,7 @@ Select `@timestamp` as the time field.
 ### S3 backup bucket
 
 Firehose backs up all documents to the existing `pds-logs-<env>` bucket (managed by
-`pdc-cds-infra`). The bucket ARN is read from SSM at `/pds/pdc-cds-infra/s3/pds-logs-bucket-arn`
+`pdc-cds-infra`). The bucket ARN is read from SSM (see the o11y-platform [SSM contract](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#ssm-contract))
 — no tfvar input required.
 
 ### Kinesis stream
