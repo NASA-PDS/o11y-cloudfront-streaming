@@ -316,30 +316,47 @@ pds-o11y-cloudfront-streaming-transform
 
 Operational deploys use Terragrunt from `cds-infra-deploy`, as described in the runbook. To iterate
 on this module from a local checkout, use the Task wrapper, which reads this repo's own gitignored
-tfvars. Export credentials as described in the runbook
-[Prerequisites](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#prerequisites).
-Run `task --list` in this directory for everything available.
+tfvars. Run `task --list` in the `terraform` directory for everything available.
 
 ```bash
-cd terraform
-cp -p iam/tfvars/dev.tfvars.example iam/tfvars/dev.tfvars
-cp -p tfvars/dev.tfvars.example tfvars/dev.tfvars
-# Edit both files, then:
-task iam:plan       VENUE=dev
-task streaming:plan VENUE=dev
+VENUE="dev"                                       # dev | test | prod
+PROFILE_NAME="<sso-profile>"
+O11Y_STREAMING_DIR="<path-to-this-checkout>"
+
+# The Terraform S3 backend needs exported credentials with AWS_PROFILE unset.
+eval $(aws configure export-credentials --profile "${PROFILE_NAME}" --format env)
+unset AWS_PROFILE
+
+cd "${O11Y_STREAMING_DIR}/terraform"
+cp -p iam/tfvars/${VENUE}.tfvars.example iam/tfvars/${VENUE}.tfvars
+cp -p tfvars/${VENUE}.tfvars.example tfvars/${VENUE}.tfvars
 ```
 
-Swap `VENUE=dev` for `test` or `prod` as needed.
+Edit both tfvars files, then:
+
+```bash
+task iam:plan       VENUE="${VENUE}"
+task streaming:plan VENUE="${VENUE}"
+```
 
 ## Verify
 
 Per-phase checks are in the runbook ([Phase 4](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-4---streaming),
 [Phase 6](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-6---cloudfront-pds-main)).
-To check that CloudFront records reach the Kinesis stream, run this from the repo root with
-credentials exported, after the `pds-main` real-time log config is applied:
+To check that CloudFront records reach the Kinesis stream, run this after the `pds-main` real-time
+log config is applied:
 
 ```bash
-VENUE="dev"   # dev | test | prod
+VENUE="dev"                                       # dev | test | prod
+REGION="us-west-2"
+PROFILE_NAME="<sso-profile>"
+O11Y_STREAMING_DIR="<path-to-this-checkout>"
+
+eval $(aws configure export-credentials --profile "${PROFILE_NAME}" --format env)
+unset AWS_PROFILE
+export AWS_DEFAULT_REGION="${REGION}"
+
+cd "${O11Y_STREAMING_DIR}"
 bash scripts/smoke-test-realtime-stream.sh "${VENUE}"
 ```
 
