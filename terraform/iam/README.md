@@ -99,78 +99,25 @@ apply with zero knowledge of whether the main module's resources exist yet.
 
 ## Publishes to SSM
 
-Role ARNs are published under the following SSM paths (renamed from the legacy `/pds/monitor/...`
-prefix as part of this rename — any consumer of the old paths must update to these new paths):
-
 ```text
 /pds/o11y-cloudfront-streaming/cloudfront/cloudfront-role-arn
 /pds/o11y-cloudfront-streaming/firehose/firehose-role-arn
 /pds/o11y-cloudfront-streaming/lambda/lambda-transform-role-arn
+/pds/o11y-cloudfront-streaming/kinesis/kinesis-stream-arn
 ```
 
-The main module reads all three back via `data "aws_ssm_parameter"`.
+The first three are role ARNs. The main module reads all three back via `data "aws_ssm_parameter"`.
+`kinesis-stream-arn` is computed here from the static stream name; the stream itself is created by
+the main module. o11y-platform reads `firehose-role-arn`, and `pdc-cds-infra/cloudfront/pds-main`
+reads `cloudfront-role-arn`, `firehose-role-arn`, and `kinesis-stream-arn`. The full list of
+cross-repo parameters is the o11y-platform
+[SSM contract](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#ssm-contract).
 
 ## Deploy
 
-Deploy this **before** the main module — its resources (CloudFront log config, Firehose delivery
-stream, Lambda function) need these role ARNs from SSM to plan successfully. Deployment is driven
-by [Task](https://taskfile.dev) via the [`Taskfile.yaml`](../Taskfile.yaml) one level up — run
-`task --list` there to see everything available.
+Deploy this module before the main module: its resources need these role ARNs from SSM to plan. The
+phase, permission tier (Admin), and verification are in the o11y-platform runbook,
+[Phase 2b](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-2---iam).
+Venue inputs are in `cds-infra-deploy` at `venues/<venue>/o11y-cloudfront-streaming/iam/terragrunt.hcl`.
 
-tfvars are tracked in the `cds-infra-deploy` repo (private GitLab, not GitHub) at
-`venues/<venue>/o11y-cloudfront-streaming/iam.tfvars` — set `CDS_INFRA_DEPLOY_DIR` to a local
-checkout (see `../README.md#deploy` for the full env var / `LOCAL=1` explanation).
-
-```bash
-cd terraform
-export CDS_INFRA_DEPLOY_DIR=/path/to/cds-infra-deploy
-
-task iam:validate
-task iam:plan   VENUE=dev
-task iam:deploy VENUE=dev
-```
-
-Swap `VENUE=dev` for `VENUE=test` / `VENUE=prod` for other venues.
-
-## Migrating an existing (pre-split) deployment
-
-If this repo was previously deployed as a single module with local state, the IAM resources are
-sitting in that old state file, not here. Someone with the current AWS credentials and that local
-`terraform.tfstate` needs to move them once, **after** the main module has already been migrated
-to its own S3 backend (see `../README.md`):
-
-```bash
-cd terraform
-
-# 1. Pull the IAM-related resources out of the main module's state into a local file.
-#    Repeat for every address in this list:
-#      aws_iam_role.cloudfront_realtime_log_kinesis
-#      aws_iam_role_policy.cloudfront_realtime_log_kinesis
-#      aws_iam_role.cloudfront_realtime_firehose
-#      aws_iam_role_policy.firehose_s3_backup
-#      aws_iam_role_policy.firehose_cloudwatch_logs
-#      aws_iam_role_policy.firehose_lambda_invoke
-#      aws_iam_role_policy.firehose_kinesis_read
-#      aws_iam_role_policy.firehose_vpc_access
-#      aws_iam_role_policy.firehose_opensearch_write
-#      aws_iam_role.cloudfront_realtime_log_transform
-#      aws_iam_role_policy_attachment.lambda_basic_execution
-#      aws_ssm_parameter.cloudfront_role_arn
-#      aws_ssm_parameter.firehose_role_arn
-terraform state mv -state-out=/tmp/iam.tfstate <address> <address>
-
-# 2. Push the extracted state into this module's own backend.
-cd iam
-terraform init -backend-config=backend-dev.hcl
-terraform state push /tmp/iam.tfstate
-
-# 3. There is no pre-existing aws_ssm_parameter for the Lambda execution role
-#    (it was previously only used in-module) — import it after the first
-#    `terraform apply` here creates it normally, or apply straight away and
-#    let Terraform create it fresh.
-
-# 4. Verify both sides are clean.
-cd ..
-task iam:plan       VENUE=dev   # expect no changes
-task streaming:plan VENUE=dev   # expect no changes
-```
+To iterate locally, see [Local iteration](../README.md#local-iteration).
