@@ -284,37 +284,42 @@ pds-o11y-cloudfront-streaming-transform
 
 ## Local iteration
 
-Operational deploys use Terragrunt from `cds-infra-deploy`, as described in the runbook. To iterate
-on this module from a local checkout, use the Task wrapper, which reads this repo's own gitignored
-tfvars. Run `task --list` in the `terraform` directory for everything available.
+For local runs only. Operational deploys use Terragrunt from `cds-infra-deploy` (see the runbook). The Task wrapper reads this repo's gitignored tfvars. `task --list` shows all tasks.
+
+**Setup**
 
 ```bash
 VENUE="dev"                                       # dev | test | prod
 PROFILE_NAME="<sso-profile>"
 O11Y_STREAMING_DIR="<path-to-this-checkout>"
 
-# The Terraform S3 backend needs exported credentials with AWS_PROFILE unset.
 eval $(aws configure export-credentials --profile "${PROFILE_NAME}" --format env)
 unset AWS_PROFILE
-
 cd "${O11Y_STREAMING_DIR}/terraform"
-cp -p iam/tfvars/${VENUE}.tfvars.example iam/tfvars/${VENUE}.tfvars
-cp -p tfvars/${VENUE}.tfvars.example tfvars/${VENUE}.tfvars
 ```
 
-Edit both tfvars files, then:
+**Steps**
 
-```bash
-task iam:plan       VENUE="${VENUE}"
-task streaming:plan VENUE="${VENUE}"
-```
+1. Copy the example tfvars:
+
+   ```bash
+   cp -p iam/tfvars/${VENUE}.tfvars.example iam/tfvars/${VENUE}.tfvars
+   cp -p tfvars/${VENUE}.tfvars.example tfvars/${VENUE}.tfvars
+   ```
+
+2. Edit both files.
+3. Plan:
+
+   ```bash
+   task iam:plan       VENUE="${VENUE}"
+   task streaming:plan VENUE="${VENUE}"
+   ```
 
 ## Verify
 
-Per-phase checks are in the runbook ([Phase 4](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-4---streaming),
-[Phase 6](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-6---cloudfront-pds-main)).
-To check that CloudFront records reach the Kinesis stream, run this after the `pds-main` real-time
-log config is applied:
+Streaming smoke test. Run it after the `pds-main` real-time log config is applied and the distribution has finished deploying. Placement in the deployment: runbook [Phase 6](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-6---cloudfront-pds-main).
+
+**Setup**
 
 ```bash
 VENUE="dev"                                       # dev | test | prod
@@ -325,19 +330,27 @@ O11Y_STREAMING_DIR="<path-to-this-checkout>"
 eval $(aws configure export-credentials --profile "${PROFILE_NAME}" --format env)
 unset AWS_PROFILE
 export AWS_DEFAULT_REGION="${REGION}"
-
 cd "${O11Y_STREAMING_DIR}"
-bash scripts/smoke-test-realtime-stream.sh "${VENUE}"
 ```
 
-The script requests a few URLs under `/data`, then polls the CloudWatch `IncomingRecords` metric on
-`pds-o11y-cloudfront-streaming-kinesis` for about 3 minutes.
+**Steps**
 
-Expected: `PASS: <n> record(s) reached the Kinesis stream`. A `FAIL` means no records arrived. Check
-that the real-time log config is attached and the distribution has finished deploying.
+1. Run the smoke test:
 
-The script does not check OpenSearch. The domain is VPC-only, so confirm delivery with the
-runbook [end-to-end verify](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-9---end-to-end-verify).
+   ```bash
+   bash scripts/smoke-test-realtime-stream.sh "${VENUE}"
+   ```
+
+   Expect: `PASS: <n> record(s) reached the Kinesis stream`, within about 3 minutes.
+
+**If it fails**
+
+- `FAIL` means no records arrived. Check that the log config is attached to the distribution and the distribution has finished deploying.
+
+**Notes**
+
+- The script requests a few URLs under `/data`, then polls the CloudWatch `IncomingRecords` metric on `pds-o11y-cloudfront-streaming-kinesis`.
+- It does not check OpenSearch (the domain is VPC-only). Use runbook [Phase 9](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-9---end-to-end-verify).
 
 ## Updating
 
