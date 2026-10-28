@@ -16,18 +16,18 @@ unless the project is deliberately being repurposed as a Python package.
 ### Terraform
 
 Two root modules, each with its own state: `terraform/iam/` (execution roles, deploy first) and
-`terraform/` (Kinesis, Firehose, Lambda, CloudFront realtime log config). Deployment is driven by
-[Task](https://taskfile.dev) via `terraform/Taskfile.yaml` — namespaced `iam:*` / `streaming:*`
+`terraform/` (Kinesis, Firehose, Lambda). The CloudFront realtime log config is created by
+`pdc-cds-infra/cloudfront/pds-main`, not here. Operational deploys use Terragrunt from
+`cds-infra-deploy` (see the o11y-platform deployment runbook). For local iteration,
+[Task](https://taskfile.dev) via `terraform/Taskfile.yaml` provides namespaced `iam:*` / `streaming:*`
 tasks wrapping `terraform init/plan/apply` with the right `-backend-config` / `-var-file` per
 venue. All commands run from the `terraform/` directory.
 
-tfvars are tracked in `cds-infra-deploy` at `venues/<venue>/o11y-cloudfront-streaming/{iam,streaming}.tfvars`,
-not in this repo. Set `CDS_INFRA_DEPLOY_DIR` to a local checkout (default), or pass `LOCAL=1` to a
-task to fall back to this repo's own gitignored `tfvars/` dirs for personal iteration.
+The tasks read this repo's own gitignored tfvars (`iam/tfvars/<venue>.tfvars` and
+`tfvars/<venue>.tfvars`), copied from the `.tfvars.example` files.
 
 ```bash
 cd terraform
-export CDS_INFRA_DEPLOY_DIR=/path/to/cds-infra-deploy
 
 task iam:deploy       VENUE=dev   # deploy first — main module reads role ARNs from SSM
 task streaming:deploy VENUE=dev
@@ -93,8 +93,9 @@ Single-file, dependency-free (stdlib only) Firehose transformation Lambda — pa
 `archive_file` (no build step, no `requirements.txt`). Responsibilities:
 
 - Decode/parse tab-delimited CloudFront real-time log records. `FIELDS` in this file **must stay in sync** with
-  `cloudfront_realtime_log_fields` in `terraform/locals.tf` (same fields, same order) — CloudFront's real-time
-  log config sends fields positionally, not by name.
+  `cloudfront_realtime_log_fields` in `terraform/locals.tf` (same fields, same order) and with
+  `o11y_streaming_log_fields` in pdc-cds-infra `cloudfront/pds-main/locals.tf`, which creates the log config —
+  CloudFront's real-time log config sends fields positionally, not by name.
 - Convert `sc-status`/`sc-bytes` to int and `timestamp`/`time-to-first-byte` to float; `-` becomes `null`.
 - Derive an `@timestamp` ISO-8601 field from the epoch `timestamp`.
 - Classify each request (`request_type`: `directory_listing`, `data_download`, `metadata_download`,

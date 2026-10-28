@@ -19,7 +19,7 @@ see [Deployment](#deployment) below.
 
 `iam/` and this module would naturally depend on each other: the IAM policies need ARNs for
 resources this module creates (the Kinesis stream, the Lambda function), while this module needs
-the role ARNs back for the CloudFront log config, Firehose, and Lambda. Every resource name here
+the role ARNs back for Firehose and Lambda. Every resource name here
 is a static literal (no random suffixes), so `iam/` **computes** the ARNs it needs from
 `data.aws_caller_identity` + `data.aws_partition` + the same name locals, instead of reading a
 live resource attribute. That breaks the cycle: `iam/` can apply with zero knowledge of whether
@@ -37,7 +37,7 @@ flowchart LR
 
     subgraph main["terraform/ — deploy 2nd"]
         SUB["data aws_ssm_parameter"]
-        RES["Kinesis stream, Lambda function,\nFirehose stream, CloudFront log config"]
+        RES["Kinesis stream, Lambda function,\nFirehose stream"]
         SUB --> RES
     end
 
@@ -315,8 +315,8 @@ pds-o11y-cloudfront-streaming-transform
 ## Local iteration
 
 Operational deploys use Terragrunt from `cds-infra-deploy`, as described in the runbook. To iterate
-on this module from a local checkout, use the Task wrapper with this repo's own gitignored tfvars
-(`LOCAL=1`). Export credentials as described in the runbook
+on this module from a local checkout, use the Task wrapper, which reads this repo's own gitignored
+tfvars. Export credentials as described in the runbook
 [Prerequisites](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#prerequisites).
 Run `task --list` in this directory for everything available.
 
@@ -325,8 +325,8 @@ cd terraform
 cp -p iam/tfvars/dev.tfvars.example iam/tfvars/dev.tfvars
 cp -p tfvars/dev.tfvars.example tfvars/dev.tfvars
 # Edit both files, then:
-task iam:plan       VENUE=dev LOCAL=1
-task streaming:plan VENUE=dev LOCAL=1
+task iam:plan       VENUE=dev
+task streaming:plan VENUE=dev
 ```
 
 Swap `VENUE=dev` for `test` or `prod` as needed.
