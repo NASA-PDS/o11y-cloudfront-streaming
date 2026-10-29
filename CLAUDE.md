@@ -24,7 +24,8 @@ tasks wrapping `terraform init/plan/apply` with the right `-backend-config` / `-
 venue. All commands run from the `terraform/` directory.
 
 The tasks read this repo's own gitignored tfvars (`iam/tfvars/<venue>.tfvars` and
-`tfvars/<venue>.tfvars`), copied from the `.tfvars.example` files.
+`tfvars/<venue>.tfvars`), copied from the `.tfvars.example` files, and gitignored S3 backend files
+(`iam/backend-<venue>.hcl` and `backend-<venue>.hcl`); `terraform/README.md` shows how to write them.
 
 ```bash
 cd terraform
@@ -62,7 +63,7 @@ tox                            # tests + lint + docs
 
 ```
 CloudFront (existing distribution, /data* and /data/store/img* cache behaviors)
-  -> aws_cloudfront_realtime_log_config (100% sampling, 17 fields, see locals.tf)
+  -> aws_cloudfront_realtime_log_config (created by pdc-cds-infra pds-main; 100% sampling, 17 fields)
   -> Kinesis Data Stream (on-demand, 90-day retention)
   -> Firehose delivery stream (destination: opensearch)
        -> Lambda transform (terraform/lambda/lambda_function.py), invoked inline via Firehose
@@ -72,30 +73,25 @@ CloudFront (existing distribution, /data* and /data/store/img* cache behaviors)
        -> S3 backup (existing pds-logs-<env> bucket, GZIP, AllDocuments mode)
 ```
 
-Key point: this package **creates** the Kinesis stream, Lambda, Firehose stream, IAM roles, the Firehose
-security group, and the CloudFront real-time log config — but it does **not** own the CloudFront distribution,
-the OpenSearch domain, the VPC/subnets, or the S3 backup bucket. Those are looked up via `data` sources or
-passed in as variables (`vpc_id`, `private_subnet_ids`, `pds_logs_bucket_arn`) and referenced by
-convention-based names in `locals.tf`. This module publishes the Firehose security group ID to SSM so
-`o11y-platform` can create the Firehose→OpenSearch ingress rule. To wire a CloudFront distribution
-to this config, add `realtime_log_config_arn` (the `cloudfront_realtime_log_config_arn` output) to its ordered
-cache behaviors in the Terraform stack that owns that distribution — see README.md for the exact snippet and a
-note on cache-behavior precedence ordering.
+What this repo creates and what it does not own: see [README.md](README.md) and
+[terraform/README.md](terraform/README.md). The OpenSearch domain is looked up by name, the bucket ARN is read
+from SSM, and `vpc_id` / `private_subnet_ids` are variables. `pdc-cds-infra/cloudfront/pds-main` (flag
+`enable_o11y_streaming`) creates the real-time log config and attaches it to the cache behaviors.
 
-Resource/IAM role names, the OpenSearch domain name, and SSM parameter paths are all derived in `locals.tf` from
-`var.env` (dev/test/prod) — per-venue variable values are tracked in `cds-infra-deploy` at
-`venues/<venue>/o11y-cloudfront-streaming/{streaming,iam}.tfvars` (this repo keeps only `.example` templates
-plus gitignored local copies for `LOCAL=1` iteration; see Commands above).
+Resource and role names and SSM parameter paths are static literals in `terraform/locals.tf` and
+`terraform/iam/locals.tf` (that is what lets `iam/` compute ARNs); only the OpenSearch domain name is derived
+from `var.env` (dev/test/prod). Per-venue variable values are tracked in `cds-infra-deploy` at
+`venues/<venue>/o11y-cloudfront-streaming/{iam,streaming}/terragrunt.hcl` (this repo keeps only `.example`
+templates plus gitignored local copies for Task iteration; see Commands above).
 
 ### Lambda transform (`terraform/lambda/lambda_function.py`)
 
 Single-file, dependency-free (stdlib only) Firehose transformation Lambda — packaged by Terraform via
 `archive_file` (no build step, no `requirements.txt`). Responsibilities:
 
-- Decode/parse tab-delimited CloudFront real-time log records. `FIELDS` in this file **must stay in sync** with
-  `cloudfront_realtime_log_fields` in `terraform/locals.tf` (same fields, same order) and with
-  `o11y_streaming_log_fields` in pdc-cds-infra `cloudfront/pds-main/locals.tf`, which creates the log config —
-  CloudFront's real-time log config sends fields positionally, not by name.
+- Decode/parse tab-delimited CloudFront real-time log records. `FIELDS` in this file **must stay in sync** (same
+  fields, same order) with `o11y_streaming_log_fields` in pdc-cds-infra `cloudfront/pds-main/locals.tf`, which
+  creates the log config — CloudFront's real-time log config sends fields positionally, not by name.
 - Convert `sc-status`/`sc-bytes` to int and `timestamp`/`time-to-first-byte` to float; `-` becomes `null`.
 - Derive an `@timestamp` ISO-8601 field from the epoch `timestamp`.
 - Classify each request (`request_type`: `directory_listing`, `data_download`, `metadata_download`,
@@ -112,7 +108,7 @@ Single-file, dependency-free (stdlib only) Firehose transformation Lambda — pa
 
 There is currently no automated test coverage for this file (no `terraform/lambda/test_*.py` or equivalent) —
 changes to field parsing or classification logic should be manually verified against sample CloudFront
-real-time log lines before deploying, since a field-order mismatch with `locals.tf` silently corrupts every
+real-time log lines before deploying, since a field-order mismatch with `pds-main` silently corrupts every
 downstream document.
 
 ### Extension list maintenance

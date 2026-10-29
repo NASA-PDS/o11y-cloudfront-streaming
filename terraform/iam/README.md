@@ -1,16 +1,13 @@
-# CloudFront Real-Time Logging — IAM
+# CloudFront Real-Time Logging - IAM
 
-Standalone root module (own state) for the three IAM roles used by the CloudFront real-time
-logging pipeline in [`../`](../README.md):
+Standalone root module (own state) for the three IAM roles used by the pipeline in
+[`../`](../README.md). It is separate so IAM changes have their own review and apply path.
 
-- `pds-o11y-cloudfront-streaming-cf-kinesis-role` — lets CloudFront write real-time logs to Kinesis
-- `pds-o11y-cloudfront-streaming-firehose-role` — Firehose's execution role (reads Kinesis, invokes the
-  transform Lambda, writes to OpenSearch, backs up to S3)
-- `pds-o11y-cloudfront-streaming-transform-role` — the transform Lambda's execution role
-
-Split out from the main module so IAM changes go through their own review/apply path (per the
-org's Terraform guidelines), separate from the pipeline resources those roles have permission to
-touch.
+| Role | Trusted by | Allows |
+|---|---|---|
+| `pds-o11y-cloudfront-streaming-cf-kinesis-role` | CloudFront (same account) | Write records to the Kinesis stream |
+| `pds-o11y-cloudfront-streaming-firehose-role` | Firehose | Read the Kinesis stream; invoke the transform Lambda; `es:*` on the OpenSearch domain; write the S3 backup under `pds_logs_firehose_prefix`; write CloudWatch Logs; manage VPC network interfaces |
+| `pds-o11y-cloudfront-streaming-transform-role` | Lambda | `AWSLambdaBasicExecutionRole` (CloudWatch Logs) |
 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
@@ -88,26 +85,16 @@ No modules.
 | <a name="output_lambda_execution_role_arn_ssm_parameter_name"></a> [lambda\_execution\_role\_arn\_ssm\_parameter\_name](#output\_lambda\_execution\_role\_arn\_ssm\_parameter\_name) | SSM parameter name containing the Lambda execution IAM role ARN. |
 <!-- END_TF_DOCS -->
 
-## Why this can deploy independently
+## SSM parameters
 
-The three roles' policies need ARNs for resources the *main* module owns (the Kinesis stream, the
-Lambda function, the OpenSearch domain), while the main module needs these roles' ARNs back. Every
-name in this repo is a static literal (no random suffixes), so those ARNs are computed here from
-`data.aws_caller_identity` + `data.aws_partition` + the same name locals, rather than read via a
-live resource reference — see `locals.tf`. That breaks the two-way dependency: this module can
-apply with zero knowledge of whether the main module's resources exist yet.
-
-## Publishes to SSM
-
-This module publishes the three role ARNs and the Kinesis stream ARN to SSM. The main module reads the
-three role ARNs back via `data "aws_ssm_parameter"`. The parameter paths, and which repos read each
-one, are in the o11y-platform [SSM contract](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#ssm-contract).
+This module publishes the three role ARNs and the Kinesis stream ARN. The runbook
+[SSM contract](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#ssm-contract)
+lists the paths and which repos read each, except the Lambda role ARN
+(`lambda/lambda-transform-role-arn` under the component prefix), which only the main module reads.
 
 ## Deploy
 
-Deploy this module before the main module: its resources need these role ARNs from SSM to plan. The
-phase, permission tier (Admin), and verification are in the o11y-platform runbook,
-[Phase 2b](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-2---iam).
-Venue inputs are in `cds-infra-deploy` at `venues/<venue>/o11y-cloudfront-streaming/iam/terragrunt.hcl`.
-
-To iterate locally, see [Local iteration](../README.md#local-iteration).
+Deploy before the main module (Admin tier). Phase, permissions, and verification:
+runbook [Phase 2b](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-2---iam).
+Why it can apply first and where venue inputs live: [`../README.md`](../README.md#deployment).
+Local runs: [Local iteration](../README.md#local-iteration).

@@ -16,6 +16,9 @@
 #   - brew install go-task/tap/go-task
 #   - Run `task auth` and follow the instructions to export SSO credentials.
 #
+# Backend: init reads gitignored iam/backend-<venue>.hcl and backend-<venue>.hcl
+#   (see README.md, Local iteration).
+#
 # tfvars:
 #   Every task reads this repo's own gitignored tfvars, copied from the examples:
 #     cp -p iam/tfvars/dev.tfvars.example iam/tfvars/dev.tfvars
@@ -152,7 +155,7 @@ tasks:
     # ------------------------------------------------------------------
     # Streaming: Kinesis, Firehose, Lambda transform
     # Requires iam:deploy and o11y-platform's opensearch:deploy first -- reads
-    # role ARNs and the OpenSearch domain/security group from SSM.
+    # role ARNs from SSM and looks up the OpenSearch domain by name.
     # ------------------------------------------------------------------
 
     streaming:init:
