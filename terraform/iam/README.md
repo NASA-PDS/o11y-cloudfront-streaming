@@ -1,16 +1,13 @@
-# CloudFront Real-Time Logging — IAM
+# CloudFront Real-Time Logging - IAM
 
-Standalone root module (own state) for the three IAM roles used by the CloudFront real-time
-logging pipeline in [`../`](../README.md):
+Standalone root module (own state) for the three IAM roles used by the pipeline in
+[`../`](../README.md). It is separate so IAM changes have their own review and apply path.
 
-- `pds-o11y-cloudfront-streaming-cf-kinesis-role` — lets CloudFront write real-time logs to Kinesis
-- `pds-o11y-cloudfront-streaming-firehose-role` — Firehose's execution role (reads Kinesis, invokes the
-  transform Lambda, writes to OpenSearch, backs up to S3)
-- `pds-o11y-cloudfront-streaming-transform-role` — the transform Lambda's execution role
-
-Split out from the main module so IAM changes go through their own review/apply path (per the
-org's Terraform guidelines), separate from the pipeline resources those roles have permission to
-touch.
+| Role | Trusted by | Allows |
+|---|---|---|
+| `pds-o11y-cloudfront-streaming-cf-kinesis-role` | CloudFront (same account) | Write records to the Kinesis stream |
+| `pds-o11y-cloudfront-streaming-firehose-role` | Firehose | Read the Kinesis stream; invoke the transform Lambda; `es:*` on the OpenSearch domain; write the S3 backup under `pds_logs_firehose_prefix`; write CloudWatch Logs; manage VPC network interfaces |
+| `pds-o11y-cloudfront-streaming-transform-role` | Lambda | `AWSLambdaBasicExecutionRole` (CloudWatch Logs) |
 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
@@ -88,89 +85,16 @@ No modules.
 | <a name="output_lambda_execution_role_arn_ssm_parameter_name"></a> [lambda\_execution\_role\_arn\_ssm\_parameter\_name](#output\_lambda\_execution\_role\_arn\_ssm\_parameter\_name) | SSM parameter name containing the Lambda execution IAM role ARN. |
 <!-- END_TF_DOCS -->
 
-## Why this can deploy independently
+## SSM parameters
 
-The three roles' policies need ARNs for resources the *main* module owns (the Kinesis stream, the
-Lambda function, the OpenSearch domain), while the main module needs these roles' ARNs back. Every
-name in this repo is a static literal (no random suffixes), so those ARNs are computed here from
-`data.aws_caller_identity` + `data.aws_partition` + the same name locals, rather than read via a
-live resource reference — see `locals.tf`. That breaks the two-way dependency: this module can
-apply with zero knowledge of whether the main module's resources exist yet.
-
-## Publishes to SSM
-
-Role ARNs are published under the following SSM paths (renamed from the legacy `/pds/monitor/...`
-prefix as part of this rename — any consumer of the old paths must update to these new paths):
-
-```text
-/pds/o11y-cloudfront-streaming/cloudfront/cloudfront-role-arn
-/pds/o11y-cloudfront-streaming/firehose/firehose-role-arn
-/pds/o11y-cloudfront-streaming/lambda/lambda-transform-role-arn
-```
-
-The main module reads all three back via `data "aws_ssm_parameter"`.
+This module publishes the three role ARNs and the Kinesis stream ARN. The runbook
+[SSM contract](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#ssm-contract)
+lists the paths and which repos read each, except the Lambda role ARN
+(`lambda/lambda-transform-role-arn` under the component prefix), which only the main module reads.
 
 ## Deploy
 
-Deploy this **before** the main module — its resources (CloudFront log config, Firehose delivery
-stream, Lambda function) need these role ARNs from SSM to plan successfully. Deployment is driven
-by [Task](https://taskfile.dev) via the [`Taskfile.yaml`](../Taskfile.yaml) one level up — run
-`task --list` there to see everything available.
-
-tfvars are tracked in the `cds-infra-deploy` repo (private GitLab, not GitHub) at
-`venues/<venue>/o11y-cloudfront-streaming/iam.tfvars` — set `CDS_INFRA_DEPLOY_DIR` to a local
-checkout (see `../README.md#deploy` for the full env var / `LOCAL=1` explanation).
-
-```bash
-cd terraform
-export CDS_INFRA_DEPLOY_DIR=/path/to/cds-infra-deploy
-
-task iam:validate
-task iam:plan   VENUE=dev
-task iam:deploy VENUE=dev
-```
-
-Swap `VENUE=dev` for `VENUE=test` / `VENUE=prod` for other venues.
-
-## Migrating an existing (pre-split) deployment
-
-If this repo was previously deployed as a single module with local state, the IAM resources are
-sitting in that old state file, not here. Someone with the current AWS credentials and that local
-`terraform.tfstate` needs to move them once, **after** the main module has already been migrated
-to its own S3 backend (see `../README.md`):
-
-```bash
-cd terraform
-
-# 1. Pull the IAM-related resources out of the main module's state into a local file.
-#    Repeat for every address in this list:
-#      aws_iam_role.cloudfront_realtime_log_kinesis
-#      aws_iam_role_policy.cloudfront_realtime_log_kinesis
-#      aws_iam_role.cloudfront_realtime_firehose
-#      aws_iam_role_policy.firehose_s3_backup
-#      aws_iam_role_policy.firehose_cloudwatch_logs
-#      aws_iam_role_policy.firehose_lambda_invoke
-#      aws_iam_role_policy.firehose_kinesis_read
-#      aws_iam_role_policy.firehose_vpc_access
-#      aws_iam_role_policy.firehose_opensearch_write
-#      aws_iam_role.cloudfront_realtime_log_transform
-#      aws_iam_role_policy_attachment.lambda_basic_execution
-#      aws_ssm_parameter.cloudfront_role_arn
-#      aws_ssm_parameter.firehose_role_arn
-terraform state mv -state-out=/tmp/iam.tfstate <address> <address>
-
-# 2. Push the extracted state into this module's own backend.
-cd iam
-terraform init -backend-config=backend-dev.hcl
-terraform state push /tmp/iam.tfstate
-
-# 3. There is no pre-existing aws_ssm_parameter for the Lambda execution role
-#    (it was previously only used in-module) — import it after the first
-#    `terraform apply` here creates it normally, or apply straight away and
-#    let Terraform create it fresh.
-
-# 4. Verify both sides are clean.
-cd ..
-task iam:plan       VENUE=dev   # expect no changes
-task streaming:plan VENUE=dev   # expect no changes
-```
+Deploy before the main module (Admin tier). Phase, permissions, and verification:
+runbook [Phase 2b](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-2---iam).
+Why it can apply first and where venue inputs live: [`../README.md`](../README.md#deployment).
+Local runs: [Local iteration](../README.md#local-iteration).

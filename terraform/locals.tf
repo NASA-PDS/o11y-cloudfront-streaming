@@ -9,7 +9,6 @@ locals {
 
   s3_backup_bucket_name         = "pds-logs-${var.env}"
   kinesis_stream_name           = "pds-o11y-cloudfront-streaming-kinesis"
-  cloudfront_realtime_log_name  = "pds-o11y-cloudfront-streaming-log-config"
   lambda_function_name          = "pds-o11y-cloudfront-streaming-transform"
   opensearch_domain_name        = "pds-${var.env}-o11y"
   firehose_delivery_stream_name = "pds-o11y-cloudfront-streaming-firehose"

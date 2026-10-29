@@ -124,6 +124,8 @@ crash.*.log
 # to change depending on the environment.
 *.tfvars
 *.tfvars.json
+# Local S3 backend config (state bucket name), written per the terraform/README.md
+backend-*.hcl
 *.tfplan
 *.tfplan.*
 tfplan*

@@ -1,128 +1,54 @@
-# PDS CloudFront Real-Time Logging — Terraform
+# PDS CloudFront Real-Time Logging - Terraform
 
-Creates and configures the CloudFront real-time logging pipeline for PDS data-node
-distributions: a Kinesis Data Stream, a Lambda transform function, a Firehose delivery stream to
-OpenSearch (with S3 backup), the supporting IAM roles, a Firehose security group, and the
-CloudFront real-time log configuration itself.
+Kinesis Data Stream, Lambda transform, Firehose delivery stream to OpenSearch (with S3 backup), and
+Firehose security group for the CloudFront real-time logging pipeline. IAM roles are in the
+standalone [`iam/`](./iam/README.md) root module.
 
-This package does **not** own the CloudFront distribution, the OpenSearch domain, the
-VPC/subnets, or the S3 backup bucket — those are looked up via `data` sources or passed in as
-variables and referenced by convention-based names (see `locals.tf`).
+| Not owned here | Owner |
+|---|---|
+| CloudFront distribution, real-time log config, `pds-logs-<env>` bucket and its policy | pdc-cds-infra [`pds-main`](https://github.com/NASA-PDS/pdc-cds-infra/blob/main/terraform/cloudfront/pds-main/README.md#o11y-integration) |
+| OpenSearch domain, access policy, OpenSearch security group ingress rule | [o11y-platform](https://github.com/NASA-PDS/o11y-platform) |
+| VPC and subnets | Existing; passed as `vpc_id` and `private_subnet_ids` |
 
-IAM roles live in the standalone [`iam/`](./iam/README.md) root module (its own state) — deploy
-it first; see [Deployment flow](#deployment-flow) below.
+## Deployment
 
-## Deployment architecture
+The cross-repo order, permission tiers, and per-phase verification are in the o11y-platform
+[deployment runbook](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#initial-deployment).
+Venue inputs are in `cds-infra-deploy` at `venues/<venue>/o11y-cloudfront-streaming/{iam,streaming}/terragrunt.hcl`.
 
-`iam/` and this module would naturally depend on each other: the IAM policies need ARNs for
-resources this module creates (the Kinesis stream, the Lambda function), while this module needs
-the role ARNs back for the CloudFront log config, Firehose, and Lambda. Every resource name here
-is a static literal (no random suffixes), so `iam/` **computes** the ARNs it needs from
-`data.aws_caller_identity` + `data.aws_partition` + the same name locals, instead of reading a
-live resource attribute. That breaks the cycle: `iam/` can apply with zero knowledge of whether
-this module's resources exist yet.
+| Module | Runbook phase |
+|---|---|
+| `iam/` | [Phase 2b](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-2---iam) |
+| This module (`streaming`) | [Phase 4](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-4---streaming) |
+
+The two modules would depend on each other: the IAM policies need the ARNs of the Kinesis stream
+and Lambda function, and this module needs the role ARNs. All resource names are static literals,
+so `iam/` computes those ARNs from the account ID, partition, and name locals and applies first,
+without this module's resources existing. This module reads the role ARNs back from SSM.
 
 ```mermaid
 flowchart LR
-    subgraph iam["terraform/iam — deploy 1st"]
-        NAMES["static name locals\n(kinesis_stream_name, lambda_function_name, ...)"]
+    subgraph iam["terraform/iam - deploy 1st"]
+        NAMES["static name locals"]
         COMPUTE["computed ARNs\naccount_id + partition + name"]
         ROLES["3 IAM roles + policies"]
-        NAMES --> COMPUTE --> ROLES
-        ROLES --> PUB["SSM: /pds/o11y-cloudfront-streaming/{cloudfront,firehose,lambda}/*-role-arn"]
+        PUB["SSM: 3 role ARNs\n+ Kinesis stream ARN"]
+        NAMES --> COMPUTE --> ROLES --> PUB
     end
 
-    subgraph main["terraform/ — deploy 2nd"]
+    subgraph main["terraform/ - deploy 2nd"]
         SUB["data aws_ssm_parameter"]
-        RES["Kinesis stream, Lambda function,\nFirehose stream, CloudFront log config"]
+        RES["Kinesis stream, Lambda function,\nFirehose stream"]
         SUB --> RES
     end
 
     PUB -->|"read at plan time"| SUB
 ```
 
-Deploy `iam/` first (see [`iam/README.md`](./iam/README.md)); this module reads its role ARNs
-back via `data "aws_ssm_parameter"` rather than an in-module `depends_on`. This module also needs
-the existing VPC/subnets — supplied via `tfvars/<venue>.tfvars` (see [Inputs](#inputs) below). The
-S3 backup bucket ARN is read from SSM (`/pds/pdc-cds-infra/s3/pds-logs-bucket-arn`, published by
-`pdc-cds-infra/cloudfront/pds-main`). This module also does a live `data "aws_opensearch_domain"` lookup against the
-existing `pds-<env>-o11y` domain (for its ARN/endpoint), so it cannot plan until that
-domain exists. This module does not read or manage the OpenSearch domain security-group ingress
-rule; instead, it publishes the Firehose security group ID to SSM so
-[o11y-platform](https://github.com/NASA-PDS/o11y-platform) can consume it when managing OpenSearch
-access. See [Existing OpenSearch domain](#existing-opensearch-domain) below for details.
-
-Once applied, this module publishes the Kinesis stream ARN and IAM role ARNs to SSM. The
-`pdc-cds-infra/cloudfront/pds-main` module reads those SSM parameters to create the
-`aws_cloudfront_realtime_log_config` and wire it to the `/data*` and `/data/store/img*` cache
-behaviors — deploy `pds-main` after this module.
-
-## Deployment flow
-
-Full cross-repo sequence, from a clean account to a working pipeline:
-
-```mermaid
-flowchart TD
-    subgraph p1["Phase 1 — o11y-platform"]
-        OS1["opensearch\no11y_cloudfront_streaming_enabled = false\n(~15-20 min)"]
-    end
-
-    subgraph p2["Phase 2 — o11y-cloudfront-streaming (this repo)"]
-        CFIAM["iam/ — own state\npublishes role ARNs to SSM"]
-        CFMAIN["streaming apply\nKinesis, Lambda, Firehose\npublishes kinesis_stream_arn to SSM"]
-        CFIAM --> CFMAIN
-    end
-
-    subgraph p3["Phase 3 — o11y-platform"]
-        OS2["opensearch\no11y_cloudfront_streaming_enabled = true\n(access-policy update only, seconds)"]
-    end
-
-    subgraph p4["Phase 4 — pdc-cds-infra"]
-        CF["cloudfront/pds-main\ncreates realtime log config\nwires to /data* cache behaviors"]
-    end
-
-    OS1 -->|"opensearch SG id, endpoint → SSM"| CFMAIN
-    CFIAM -->|"firehose_role_arn → SSM"| OS2
-    CFMAIN -->|"kinesis_stream_arn,\ncloudfront_role_arn → SSM"| CF
-    OS2 -->|"access policy now allows Firehose"| CFMAIN
-```
-
-1. **(1) Bootstrap OpenSearch** — in [o11y-platform](https://github.com/NASA-PDS/o11y-platform),
-   deploy with `o11y_cloudfront_streaming_enabled = false` (~15-20 min).
-   ```bash
-   terragrunt apply --working-dir venues/<venue>/o11y-platform/opensearch
-   # (or: task opensearch:deploy VENUE=<venue> from the source repo)
-   ```
-   Publishes domain endpoint, ARN, and security group ID to SSM. No access policy yet — that's expected.
-2. **(2a) Deploy IAM** — publishes the three role ARNs to SSM. Can run as soon as phase 1 completes;
-   does not need the Kinesis stream or Lambda to exist yet (ARNs are computed from static name locals).
-   ```bash
-   terragrunt apply --working-dir venues/<venue>/o11y-cloudfront-streaming/iam
-   # (or: task iam:deploy VENUE=<venue> from the source repo)
-   ```
-3. **(2b) Deploy main module** — creates the Kinesis stream, Lambda, and Firehose; publishes
-   `kinesis_stream_arn` and `firehose_security_group_id` to SSM. The `apply` succeeds but Firehose
-   cannot write to OpenSearch yet — the ingress rule is managed by `o11y-platform`.
-   ```bash
-   terragrunt apply --working-dir venues/<venue>/o11y-cloudfront-streaming/streaming
-   # (or: task streaming:deploy VENUE=<venue> from the source repo)
-   ```
-4. **(3) Grant OpenSearch access** — back in o11y-platform, set `o11y_cloudfront_streaming_enabled = true`
-   in the opensearch terragrunt inputs and re-apply. Access-policy update only, no domain redeployment.
-   Firehose can now write.
-   ```bash
-   terragrunt apply --working-dir venues/<venue>/o11y-platform/opensearch
-   # (or: task opensearch:deploy VENUE=<venue> from the source repo)
-   ```
-5. **(4) Wire CloudFront** — in `pdc-cds-infra`, deploy `cloudfront/pds-main` with
-   `enable_o11y_streaming = true`. Reads the Kinesis stream ARN and CloudFront role ARN from SSM,
-   creates `pds-o11y-cloudfront-streaming-log-config`, and attaches it to the `/data*` and
-   `/data/store/img*` cache behaviors. Logs begin flowing.
-   ```bash
-   terragrunt apply --working-dir venues/<venue>/pdc-cds-infra/cloudfront/pds-main
-   ```
-
-No manual `aws ssm put-parameter` seeding is required — each repo publishes what the next needs.
+This module also requires, at plan time, the OpenSearch domain `pds-<env>-o11y` (looked up by
+name) and the `pds-logs-<env>` bucket ARN in SSM. The SSM parameters that cross repo boundaries
+are in the runbook
+[SSM contract](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#ssm-contract).
 
 ---
 
@@ -212,250 +138,191 @@ No modules.
 | <a name="output_s3_backup_bucket_arn"></a> [s3\_backup\_bucket\_arn](#output\_s3\_backup\_bucket\_arn) | ARN of the existing PDS logs bucket used for Firehose backup records (read from SSM /pds/pdc-cds-infra/s3/pds-logs-bucket-arn). |
 <!-- END_TF_DOCS -->
 
-## Firehose delivery stream
+## Resource settings
 
-Terraform creates:
+| Resource | Name | Settings |
+|---|---|---|
+| Kinesis stream | `pds-o11y-cloudfront-streaming-kinesis` | On-demand; 90-day retention (2160 hours); server-side encryption off |
+| Lambda | `pds-o11y-cloudfront-streaming-transform` | Python 3.12, `x86_64`; 512 MB memory, 512 MB ephemeral storage; 300 s timeout; `$LATEST` (`publish = false`); log group `/aws/lambda/<name>`, 30-day retention |
+| Firehose | `pds-o11y-cloudfront-streaming-firehose` | Source: the Kinesis stream. Processor: the Lambda (`$LATEST`) at the Firehose default buffer (1 MiB / 60 s). Destination: `pds-<env>-o11y` domain, index `pds-o11y-cloudfront-streaming-index-YYYY-MM-DD` (daily rotation), 1 MiB / 60 s buffer, 300 s retry. Runs in `private_subnet_ids` with the Firehose security group |
+| S3 backup | `pds-logs-<env>` (ARN from SSM) | All documents, GZIP, 5 MiB / 300 s buffer. Objects: `<pds_logs_firehose_prefix>/YYYY/MM/DD/HH/`; failures: `<pds_logs_firehose_prefix>/errors/<error-type>/YYYY/MM/DD/HH/` |
+| Firehose security group | `pds-o11y-cloudfront-streaming-firehose-sg` | No inbound rules; all outbound IPv4. The OpenSearch-side rule (TCP 443 from this group) is o11y-platform's |
 
-```text
-pds-o11y-cloudfront-streaming-firehose
-```
+The real-time log config sends fields positionally, so the field list must match, in the same
+order, `FIELDS` in `terraform/lambda/lambda_function.py` and `o11y_streaming_log_fields` in pdc-cds-infra
+`pds-main`.
 
-The stream:
+## Find the data
 
-- Reads from `pds-o11y-cloudfront-streaming-kinesis`
-- Invokes `pds-o11y-cloudfront-streaming-transform` using `$LATEST`
-- Delivers transformed records to the existing `pds-<env>-o11y` domain
-- Writes to the daily-rotated `pds-o11y-cloudfront-streaming-index` index
-- Uses the existing private subnets and `pds-o11y-cloudfront-streaming-firehose-sg`
-- Backs up all documents to the existing S3 backup bucket in GZIP format
-- Uses a 1 MiB OpenSearch buffer and the provider-supported 60-second interval
-- Retries OpenSearch delivery for 300 seconds
-
-S3 object prefixes:
-
-```text
-backup/YYYY/MM/DD/HH/
-errors/<error-type>/YYYY/MM/DD/HH/
-```
-
-The Lambda processor receives up to 1 MiB per invocation or records accumulated for 60 seconds,
-whichever threshold is reached first.
-
-## CloudFront real-time log configuration
-
-The `aws_cloudfront_realtime_log_config` resource is owned by
-`pdc-cds-infra/cloudfront/pds-main`, not by this module. That stack reads the Kinesis stream
-ARN from SSM (`/pds/o11y-cloudfront-streaming/kinesis/kinesis-stream-arn`) and the CloudFront IAM role ARN from
-SSM (`/pds/o11y-cloudfront-streaming/cloudfront/cloudfront-role-arn`) — both published by this module — and
-creates the log config named `pds-o11y-cloudfront-streaming-log-config` with:
-
-- Sampling rate: `100` percent
-- Destination: the Kinesis stream created by this package
-- IAM role: `pds-o11y-cloudfront-streaming-cf-kinesis-role` (created by [`iam/`](./iam/README.md))
-- Fields: the 17 fields required by the Lambda transform, in the exact parsing order
-
-The config is attached to the `/data*` and `/data/store/img*` ordered cache behaviors in
-`pdc-cds-infra/cloudfront/pds-main`. Deploy this module first so the SSM parameters exist
-before `pds-main` is planned.
-
-## Existing OpenSearch domain
-
-The package does not create or manage the domain. It reads:
-
-```text
-pds-<env>-o11y
-```
-
-through `data.aws_opensearch_domain.o11y` (for ARN/endpoint). This module does **not** read or
-manage the OpenSearch domain's security group — instead it publishes its Firehose security group ID
-to SSM (`/pds/o11y-cloudfront-streaming/firehose/firehose-security-group-id`) so that `o11y-platform`
-can create the Firehose→OpenSearch ingress rule on its own security group.
-
-The package also does not replace the domain access policy — the Terraform stack that owns the
-domain ([o11y-platform](https://github.com/NASA-PDS/o11y-platform)) does that itself, and
-only when told to: its `opensearch` module gates the Firehose role principal behind a
-`o11y_cloudfront_streaming_enabled` tfvar (default `false`), which stays `false` until this repo's `iam/`
-module has published `firehose-role-arn` to SSM. **This means a `terraform apply` here can
-succeed while Firehose still can't write to OpenSearch (403s) until someone flips that flag and
-re-applies o11y-platform** — see its `terraform/README.md#deployment-flow` for the full
-sequence. This avoids o11y-platform overwriting existing Logstash or administrator access.
-
-Fine-grained access control is unchanged and remains disabled.
-
-## Existing network resources
-
-Supply these existing resource IDs in `tfvars/<venue>.tfvars`:
-
-```hcl
-vpc_id              = "vpc-..."
-private_subnet_ids  = ["subnet-...", "subnet-..."]
-```
-
-The OpenSearch security group ID is read from SSM (see [Existing OpenSearch
-domain](#existing-opensearch-domain) above), not supplied here.
-
-`private_subnet_ids` is used by the Firehose VPC configuration.
-
-## Firehose security group
-
-Terraform creates:
-
-```text
-pds-o11y-cloudfront-streaming-firehose-sg
-```
-
-Rules:
-
-- No inbound rules on the Firehose security group
-- Outbound: all IPv4 protocols and ports to `0.0.0.0/0`
-- Existing OpenSearch SG inbound: TCP 443 from the Firehose SG
-
-## OpenSearch ingest path
-
-Firehose OpenSearch destination settings:
-
-```text
-Base index: pds-o11y-cloudfront-streaming-index
-Rotation:   OneDay
-Pattern:    pds-o11y-cloudfront-streaming-index-YYYY-MM-DD
-```
-
-After Firehose is created and records are delivered, use OpenSearch Dashboards Dev Tools to
-locate the indexes:
+The domain is VPC-only; use Dev Tools in the OpenSearch UI
+([runbook Phase 8](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-8---opensearch-ui-application)).
 
 ```http
 GET _cat/indices/pds-o11y-cloudfront-streaming-index-*?v&s=index
 ```
 
-Use this data-view pattern in OpenSearch Dashboards:
+Data view pattern: `pds-o11y-cloudfront-streaming-index-*`, time field `@timestamp`.
 
-```text
-pds-o11y-cloudfront-streaming-index-*
-```
+## Local iteration
 
-Select `@timestamp` as the time field.
+For local runs only. Operational deploys use Terragrunt from `cds-infra-deploy`. The Task wrapper
+reads this repo's gitignored tfvars and backend files. `task --list` shows all tasks.
 
-## Other resource settings
-
-### S3 backup bucket
-
-Firehose backs up all documents to the existing `pds-logs-<env>` bucket (managed by
-`pdc-cds-infra`). The bucket ARN is read from SSM at `/pds/pdc-cds-infra/s3/pds-logs-bucket-arn`
-— no tfvar input required.
-
-### Kinesis stream
-
-```text
-pds-o11y-cloudfront-streaming-kinesis
-```
-
-- On-demand mode
-- 90-day retention (`2160` hours)
-- Server-side encryption disabled
-
-### Lambda transform
-
-```text
-pds-o11y-cloudfront-streaming-transform
-```
-
-- Python 3.12
-- `x86_64`
-- 512 MB memory
-- 300-second timeout
-- 512 MB ephemeral storage
-- `$LATEST` (`publish = false`)
-- 30-day CloudWatch Logs retention
-
-## Deploy
-
-Deployment is driven by [Task](https://taskfile.dev) (`brew install go-task/tap/go-task`) via the
-[`Taskfile.yaml`](./Taskfile.yaml) in this directory — it wraps `terraform init/plan/apply` for
-both root modules (`iam:*`, `streaming:*`) with the right `-backend-config` / `-var-file` per venue.
-Run `task --list` to see everything available.
-
-State lives in S3 (see `backend.tf` / `backend-<venue>.hcl`). IAM must be deployed first since the
-main module reads role ARNs from SSM.
-[o11y-platform](https://github.com/NASA-PDS/o11y-platform)'s `opensearch` module must
-already be deployed too (any `o11y_cloudfront_streaming_enabled` value) — it's what publishes the domain
-and the SG ID the main module reads from SSM.
-
-tfvars are tracked in the `cds-infra-deploy` repo (private GitHub) at
-`venues/<venue>/o11y-cloudfront-streaming/{iam,streaming}.tfvars`, not in this repo —
-`iam/tfvars/` and `tfvars/` here are gitignored. Point Task at a local checkout:
+**Setup**
 
 ```bash
-cd terraform
-task auth   # follow the printed instructions to export SSO credentials
-export CDS_INFRA_DEPLOY_DIR=/path/to/cds-infra-deploy
+VENUE="dev"                                       # dev | test | prod
+REGION="us-west-2"
+PROFILE_NAME="<sso-profile>"
+STATE_BUCKET="<terraform-state-bucket>"
+O11Y_STREAMING_DIR="<path-to-this-checkout>"
 
-# 1. IAM (own state, deploy first)
-task iam:plan   VENUE=dev
-task iam:deploy VENUE=dev
-
-# 2. Everything else
-task streaming:plan   VENUE=dev
-task streaming:deploy VENUE=dev
+eval $(aws configure export-credentials --profile "${PROFILE_NAME}" --format env)
+unset AWS_PROFILE
+cd "${O11Y_STREAMING_DIR}/terraform"
 ```
 
-Swap `VENUE=dev` for `VENUE=test` / `VENUE=prod` for other venues.
+**Steps**
 
-For personal iteration before promoting values to `cds-infra-deploy`, pass `LOCAL=1` to use
-this repo's own (gitignored) tfvars instead:
+1. Write the backend config for each module:
+
+   ```bash
+   for DIR in iam .; do
+     cat > "${DIR}/backend-${VENUE}.hcl" <<EOF
+   bucket       = "${STATE_BUCKET}"
+   region       = "${REGION}"
+   encrypt      = true
+   use_lockfile = true
+   EOF
+   done
+   ```
+
+2. Copy the example tfvars, then edit both files:
+
+   ```bash
+   cp -p iam/tfvars/${VENUE}.tfvars.example iam/tfvars/${VENUE}.tfvars
+   cp -p tfvars/${VENUE}.tfvars.example tfvars/${VENUE}.tfvars
+   ```
+
+3. Plan:
+
+   ```bash
+   task iam:plan       VENUE="${VENUE}"
+   task streaming:plan VENUE="${VENUE}"
+   ```
+
+## Verify
+
+Streaming smoke test. Run it after the `pds-main` real-time log config is applied and the
+distribution has finished deploying
+([runbook Phase 6](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-6---cloudfront-pds-main)).
+Needs `python3`, `curl`, and the AWS CLI.
+
+**Setup**
 
 ```bash
-cp -p iam/tfvars/dev.tfvars.example iam/tfvars/dev.tfvars
-cp -p tfvars/dev.tfvars.example tfvars/dev.tfvars
-task iam:plan       VENUE=dev LOCAL=1
-task streaming:plan VENUE=dev LOCAL=1
+VENUE="dev"                                       # dev | test | prod
+REGION="us-west-2"
+PROFILE_NAME="<sso-profile>"
+O11Y_STREAMING_DIR="<path-to-this-checkout>"
+
+eval $(aws configure export-credentials --profile "${PROFILE_NAME}" --format env)
+unset AWS_PROFILE
+export AWS_DEFAULT_REGION="${REGION}"
+cd "${O11Y_STREAMING_DIR}"
 ```
 
-### 3. Grant OpenSearch access (in o11y-platform)
+**Steps**
 
-This module's `terraform apply` above succeeds regardless, but Firehose can't actually write to
-OpenSearch until [o11y-platform](https://github.com/NASA-PDS/o11y-platform) grants it
-access: set `o11y_cloudfront_streaming_enabled = true` in its `opensearch` tfvars and re-run
-`task opensearch:deploy VENUE=<venue>` there (access-policy update only, no domain
-redeployment). See its `terraform/README.md#deployment-flow` for the full cross-repo sequence.
+1. Run the smoke test:
 
-### First-time migration from local state
+   ```bash
+   bash scripts/smoke-test-realtime-stream.sh "${VENUE}"
+   ```
 
-Existing deployments predate the S3 backend. Whoever holds the current local
-`terraform/terraform.tfstate` needs to migrate it once:
+   Expect: `PASS: <n> record(s) reached the Kinesis stream`, within about 3 minutes.
 
-```bash
-cd terraform
-terraform init -backend-config=backend-dev.hcl -migrate-state   # answer "yes"
-terraform plan -var-file=$CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-streaming/streaming.tfvars   # must show no changes
-```
+**If it fails**
 
-## Upgrade
+- `FAIL` means no records arrived. Check that the log config is attached to the distribution and the distribution is `Deployed` (runbook Phase 6 Verify).
 
-Each component can be upgraded independently once the stack is fully deployed.
+**Notes**
 
-**Lambda transform** — update `src/pds/cloudfront_transform/` and push to main. Re-apply
-`streaming/` via Terragrunt to redeploy the Lambda package. The function uses `$LATEST` — no
-versioning/alias management needed.
+- The script requests 5 URLs under the venue's `/data/` path, then polls the CloudWatch `IncomingRecords` metric on the Kinesis stream.
+- It does not check OpenSearch. Use runbook [Phase 9](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-9---end-to-end-verify).
 
-**Kinesis stream** — on-demand scaling is automatic. Retention period and encryption settings can
-be changed with a re-apply; no stream replacement.
+## Updating
 
-**Firehose** — most settings (buffer size, retry seconds, index name) can be changed with a
-re-apply. Changing the delivery destination type requires destroy/recreate.
+Re-apply the affected module (Terragrunt in operations, `task <module>:deploy` locally).
 
-**IAM roles** — changes to policy documents take effect on re-apply of `iam/`. No resource
-replacement.
+| Change | Notes |
+|---|---|
+| Lambda code (`terraform/lambda/lambda_function.py`) | Re-apply `streaming`. Changing `FIELDS` also requires the same change to `o11y_streaming_log_fields` in `pds-main`; deploy both together |
+| Kinesis retention or encryption | In place; no stream replacement |
+| Firehose buffer, retry, or index name | In place. Changing the destination type requires destroy and recreate |
+| IAM policies | Re-apply `iam/`; no role replacement |
 
 ## Destroy
 
-The OpenSearch domain, VPC, subnets, and existing OpenSearch security group are not destroyed by
-this package. Terraform removes only the new ingress rule and the Firehose security group created
-here.
+Order, permissions, and the steps outside this repo are in the runbook
+[Teardown](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#teardown).
+Revoke the OpenSearch ingress rule (Teardown step 2) before destroying this module.
+
+Locally, destroy `streaming` before `iam/` (Setup as in [Local iteration](#local-iteration)):
 
 ```bash
-DESTROY_PLAN="tfplan.destroy.$(date +%Y%m%d.%H%M)"
-terraform plan -destroy -out="$DESTROY_PLAN"
-terraform apply "$DESTROY_PLAN"
+task streaming:destroy VENUE="${VENUE}"
+task iam:destroy       VENUE="${VENUE}"
 ```
 
-Destroy the main module before `iam/` (roles must outlive the resources that reference them).
+This removes only the resources this repo created. The OpenSearch domain, VPC, subnets, and
+`pds-logs-<env>` bucket are untouched.
+
+## Troubleshooting
+
+### Destroy fails deleting the Firehose security group (`DependencyViolation`)
+
+```text
+Error: deleting Security Group (sg-...): operation error EC2: DeleteSecurityGroup,
+api error DependencyViolation: resource sg-... has a dependent object
+```
+
+Two causes:
+
+- The OpenSearch security group still has an ingress rule that references the Firehose security group. Complete runbook Teardown step 2, then re-run the destroy.
+- Firehose left elastic network interfaces (ENIs) in the `available` state after the stream was deleted. Remove them:
+
+  1. List the ENIs still using the security group. Their description begins `Amazon Kinesis Firehose - `:
+
+     ```bash
+     SG_ID="<security-group-id>"
+     aws ec2 describe-network-interfaces \
+       --filters "Name=group-id,Values=${SG_ID}" \
+       --query 'NetworkInterfaces[].{Id:NetworkInterfaceId,Status:Status,Desc:Description}' \
+       --output table
+     ```
+
+  2. Confirm the delivery stream no longer exists (expect `ResourceNotFoundException`, or a status of `DELETING`):
+
+     ```bash
+     STREAM_NAME="pds-o11y-cloudfront-streaming-firehose"
+     aws firehose describe-delivery-stream \
+       --delivery-stream-name "${STREAM_NAME}" \
+       --query 'DeliveryStreamDescription.DeliveryStreamStatus' \
+       --output text
+     ```
+
+  3. Delete each ENI that is `available` and belongs to a deleted stream:
+
+     ```bash
+     ENI_ID="<network-interface-id>"
+     aws ec2 delete-network-interface --network-interface-id "${ENI_ID}"
+     ```
+
+  4. Re-run the destroy. Terraform resumes from the remaining resources.
+
+To list security groups that still reference the Firehose security group:
+
+```bash
+aws ec2 describe-security-groups --filters "Name=ip-permission.group-id,Values=${SG_ID}"
+```

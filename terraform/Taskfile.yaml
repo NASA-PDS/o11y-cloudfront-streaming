@@ -1,24 +1,29 @@
 # Taskfile for o11y-cloudfront-streaming Terraform
 # ============================================
 #
+# Local iteration wrapper. Operational deploys (dev, test, prod) use Terragrunt from
+# cds-infra-deploy, as described in the o11y-platform deployment runbook:
+#   https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md
+#
 # Modules and their deployment order:
 #   1. iam/      - CloudFront/Firehose/Lambda execution roles (own state, deploy first)
-#   2. (root)    - Kinesis, Firehose, Lambda transform, CloudFront realtime log config (streaming:*)
+#   2. (root)    - Kinesis, Firehose, Lambda transform (streaming:*)
 #
 # Prerequisites:
 #   - o11y-platform's opensearch module must already be deployed for the target
-#     venue (any o11y_cloudfront_streaming_enabled value) -- this repo
-#     reads the OpenSearch domain and security group from SSM.
+#     venue (any o11y_cloudfront_streaming_enabled value) -- the root module looks up
+#     the OpenSearch domain by name.
 #   - brew install go-task/tap/go-task
 #   - Run `task auth` and follow the instructions to export SSO credentials.
 #
+# Backend: init reads gitignored iam/backend-<venue>.hcl and backend-<venue>.hcl
+#   (see README.md, Local iteration).
+#
 # tfvars:
-#   By default, tfvars are read from a local cds-infra-deploy checkout:
-#     export CDS_INFRA_DEPLOY_DIR=/path/to/cds-infra-deploy
+#   Every task reads this repo's own gitignored tfvars, copied from the examples:
+#     cp -p iam/tfvars/dev.tfvars.example iam/tfvars/dev.tfvars
+#     cp -p tfvars/dev.tfvars.example tfvars/dev.tfvars
 #     task iam:plan VENUE=dev
-#   To use this repo's own (gitignored) tfvars/ dirs instead -- e.g. for personal
-#   iteration before promoting values to cds-infra-deploy -- pass LOCAL=1:
-#     task iam:plan VENUE=dev LOCAL=1
 
 ---
 
@@ -79,16 +84,7 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-streaming/iam.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform plan -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
@@ -102,16 +98,7 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-streaming/iam.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform apply -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
@@ -124,16 +111,7 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-streaming/iam.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform apply -destroy -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
@@ -146,16 +124,7 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-streaming/iam.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform plan -refresh-only -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
@@ -168,16 +137,7 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-streaming/iam.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform apply -refresh-only -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
@@ -193,9 +153,9 @@ tasks:
             - terraform show
 
     # ------------------------------------------------------------------
-    # Streaming: Kinesis, Firehose, Lambda transform, CloudFront realtime log config
+    # Streaming: Kinesis, Firehose, Lambda transform
     # Requires iam:deploy and o11y-platform's opensearch:deploy first -- reads
-    # role ARNs and the OpenSearch domain/security group from SSM.
+    # role ARNs from SSM and looks up the OpenSearch domain by name.
     # ------------------------------------------------------------------
 
     streaming:init:
@@ -214,23 +174,14 @@ tasks:
             - terraform validate -no-color
 
     streaming:plan:
-        desc: "Plan Kinesis/Firehose/Lambda/CloudFront log config changes"
+        desc: "Plan Kinesis/Firehose/Lambda changes"
         deps: ["streaming:init"]
         requires:
             vars:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-streaming/streaming.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform plan -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
@@ -243,16 +194,7 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-streaming/streaming.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform apply -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
@@ -264,16 +206,7 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-streaming/streaming.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform apply -destroy -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
@@ -285,16 +218,7 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-streaming/streaming.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform plan -refresh-only -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
@@ -306,16 +230,7 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-streaming/streaming.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform apply -refresh-only -var-file={{.TFVARS}} {{.CLI_ARGS}}
 
