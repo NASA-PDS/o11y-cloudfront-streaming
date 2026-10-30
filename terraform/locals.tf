@@ -7,7 +7,6 @@ locals {
     managedby = var.managedby
   }
 
-  s3_backup_bucket_name         = "pds-logs-${var.env}"
   kinesis_stream_name           = "pds-o11y-cloudfront-streaming-kinesis"
   lambda_function_name          = "pds-o11y-cloudfront-streaming-transform"
   opensearch_domain_name        = "pds-${var.env}-o11y"
@@ -22,24 +21,4 @@ locals {
   lambda_execution_role_arn_ssm_parameter_name = "/pds/o11y-cloudfront-streaming/lambda/lambda-transform-role-arn"
 
   firehose_security_group_id_ssm_parameter_name = "/pds/o11y-cloudfront-streaming/firehose/firehose-security-group-id"
-
-  cloudfront_realtime_log_fields = [
-    "timestamp",
-    "c-ip",
-    "time-to-first-byte",
-    "sc-status",
-    "sc-bytes",
-    "cs-method",
-    "cs-protocol",
-    "cs-host",
-    "cs-uri-stem",
-    "x-edge-location",
-    "x-edge-request-id",
-    "cs-user-agent",
-    "cs-referer",
-    "cs-uri-query",
-    "x-edge-response-result-type",
-    "x-edge-result-type",
-    "c-country",
-  ]
 }
