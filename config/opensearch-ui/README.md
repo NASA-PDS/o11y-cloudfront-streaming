@@ -7,12 +7,13 @@ Saved objects for the streaming index `pds-o11y-cloudfront-streaming-index-*`:
 | `build_export.py` | Generator (Python stdlib only). Source of truth for the panels. |
 | `export.ndjson` | Generated output: 1 index pattern, 27 visualizations, 2 dashboards. |
 
-Object IDs are derived from titles, so importing again with `overwrite=true` updates the
-objects in place.
+Object IDs are derived from fixed keys, so importing again with `overwrite=true` updates the
+objects in place. Dashboard titles start with `[Realtime]` so they group together in the
+dashboard list.
 
 ## Dashboards
 
-**CloudFront Streaming - Delivery Health** (last 24 hours, refreshes every minute)
+**[Realtime] CloudFront Delivery Health** (last 24 hours, refreshes every minute)
 
 | Panel | Shows |
 |---|---|
@@ -26,7 +27,7 @@ objects in place.
 | Status codes, Edge response result type, Top edge locations | Breakdowns, with p95 TTFB per edge location |
 | Top paths with 5xx / 4xx | `cs-uri-stem` and status for failing requests |
 
-**CloudFront Streaming - Data Usage** (last 7 days)
+**[Realtime] CloudFront Data Usage** (last 7 days)
 
 | Panel | Shows |
 |---|---|
@@ -49,7 +50,10 @@ Notes:
 - String fields aggregate on their `.keyword` subfield. With the default dynamic mapping,
   that subfield skips values over 256 characters, so very long paths or user agents are
   left out of the "Top" tables.
-- The index pattern formats `sc-bytes` as bytes and `time-to-first-byte` as seconds.
+- The index pattern formats `sc-bytes` as bytes and `time-to-first-byte` as a number with
+  three decimal places (`0.000`); the value is in seconds, but no unit is shown.
+- Data volume panels sum `sc-bytes` in GB (1 GB = 10^9 bytes) with a value script on the sum
+  aggregation, so no scripted field is needed.
 
 ## Field mapping prerequisite
 
@@ -83,7 +87,7 @@ objects**), choose **Import**, select `export.ndjson`, choose **Check for existi
 
 The OpenSearch UI application exposes the Saved Objects API under each workspace, signed
 with SigV4 (service `opensearch`). The calling role must be a workspace collaborator with
-**Read and write** or **Admin**. Requires curl 7.75 or later and `jq`.
+**Read and write** or **Admin**. Requires curl 7.76 or later and `jq`.
 
 1. Set variables and load credentials. Copy the host and workspace ID from the browser
    URL of the workspace, which looks like
@@ -96,19 +100,21 @@ with SigV4 (service `opensearch`). The calling role must be a workspace collabor
    WORKSPACE_ID="<workspace-id>"
    REPO_DIR="<path-to-this-checkout>"
 
-   eval $(aws configure export-credentials --profile "${PROFILE_NAME}" --format env)
+   eval "$(aws configure export-credentials \
+     --profile "${PROFILE_NAME}" \
+     --format env)"
    ```
 
 2. Find the data source ID for the domain:
 
    ```bash
-   curl -sS \
+   curl --silent --show-error --fail-with-body \
      "https://${APP_HOST}/w/${WORKSPACE_ID}/api/saved_objects/_find?type=data-source" \
      --aws-sigv4 "aws:amz:${REGION}:opensearch" \
      --user "${AWS_ACCESS_KEY_ID}:${AWS_SECRET_ACCESS_KEY}" \
-     -H "x-amz-security-token: ${AWS_SESSION_TOKEN}" \
-     -H "osd-xsrf: true" \
-     | jq -r '.saved_objects[] | "\(.id)  \(.attributes.title)"'
+     --header "x-amz-security-token: ${AWS_SESSION_TOKEN}" \
+     --header "osd-xsrf: true" \
+     | jq --raw-output '.saved_objects[] | "\(.id)  \(.attributes.title)"'
    ```
 
    Expect: one line per data source. Pick the one named after the domain:
@@ -120,22 +126,22 @@ with SigV4 (service `opensearch`). The calling role must be a workspace collabor
 3. Import:
 
    ```bash
-   curl -sS -X POST \
+   curl --silent --show-error --fail-with-body --request POST \
      "https://${APP_HOST}/w/${WORKSPACE_ID}/api/saved_objects/_import?overwrite=true&dataSourceId=${DATA_SOURCE_ID}" \
      --aws-sigv4 "aws:amz:${REGION}:opensearch" \
      --user "${AWS_ACCESS_KEY_ID}:${AWS_SECRET_ACCESS_KEY}" \
-     -H "x-amz-security-token: ${AWS_SESSION_TOKEN}" \
-     -H "osd-xsrf: true" \
-     -F "file=@${REPO_DIR}/config/opensearch-ui/export.ndjson" \
+     --header "x-amz-security-token: ${AWS_SESSION_TOKEN}" \
+     --header "osd-xsrf: true" \
+     --form "file=@${REPO_DIR}/config/opensearch-ui/export.ndjson" \
      | jq '{success, successCount, errors}'
    ```
 
    Expect: `"success": true` and `"successCount": 30`. OpenSearch UI appends the data source
    title to each imported title (for example
-   `CloudFront Streaming - Delivery Health_<domain-name>`). The IDs stay the same, so a
+   `[Realtime] CloudFront Delivery Health_<domain-name>`). The IDs stay the same, so a
    later import with `overwrite=true` updates these objects.
 
-4. In the workspace, open **Dashboards** and choose either `CloudFront Streaming` dashboard.
+4. In the workspace, open **Dashboards** and choose either `[Realtime]` dashboard.
 
 **If it fails**
 

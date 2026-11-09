@@ -3,19 +3,20 @@
 
 Builds one index pattern, the visualizations, and two dashboards:
 
-- "CloudFront Streaming - Delivery Health": traffic, errors, latency, cache.
-- "CloudFront Streaming - Data Usage": downloads by data area, mission,
+- "[Realtime] CloudFront Delivery Health": traffic, errors, latency, cache.
+- "[Realtime] CloudFront Data Usage": downloads by data area, mission,
   collection, file type, country, and client.
 
-Object IDs are deterministic (uuid5 of the title), so re-importing with
-overwrite=true updates objects in place instead of duplicating them.
+Object IDs are deterministic (uuid5 of the title, or of a fixed key for the
+dashboards), so re-importing with overwrite=true updates objects in place
+instead of duplicating them.
 
 Field names assume the index's default dynamic mapping: string fields are
 `text` with a `.keyword` subfield. If an index template maps those strings as
 `keyword` directly, run with `--keyword-suffix ""`.
 
 Usage:
-    python3 build_export.py                     # writes ./export.ndjson
+    python3 build_export.py                     # writes export.ndjson next to this script
     python3 build_export.py --output /path/x.ndjson
 """
 
@@ -50,6 +51,14 @@ def obj_id(kind, title):
     return str(uuid.uuid5(NAMESPACE, f"{kind}:{title}"))
 
 
+ID_PREFIX = "Streaming - "
+
+
+def display_title(key):
+    """Visualization keys start with ID_PREFIX, which seeds the object ID but is not shown."""
+    return key.removeprefix(ID_PREFIX)
+
+
 # ---------------------------------------------------------------- aggs
 
 
@@ -63,6 +72,12 @@ def metric(agg_type, field, label, agg_id, **extra):
     params.update(extra)
     return {"id": agg_id, "enabled": True, "type": agg_type, "schema": "metric",
             "params": params}
+
+
+def gb_sum(label, agg_id):
+    """Sum of sc-bytes in GB: a value script on the summed field, so no scripted field is needed."""
+    return metric("sum", "sc-bytes", label, agg_id,
+                  json=json.dumps({"script": {"source": "_value / 1000000000.0"}}))
 
 
 def terms(field, agg_id, schema, size=10, order_by="1", other=False, label=None):
@@ -154,13 +169,13 @@ def search_source(query="", with_index=True):
 
 def visualization(title, vis_type, aggs, params, query="", description="",
                   ui_state=None):
-    vis_state = {"title": title, "type": vis_type, "aggs": aggs, "params": params}
+    vis_state = {"title": display_title(title), "type": vis_type, "aggs": aggs, "params": params}
     return {
         "id": obj_id("visualization", title),
         "type": "visualization",
         "migrationVersion": {"visualization": "7.10.0"},
         "attributes": {
-            "title": title,
+            "title": display_title(title),
             "description": description,
             "version": 1,
             "uiStateJSON": json.dumps(ui_state or {}),
@@ -183,7 +198,7 @@ def controls(title, fields):
                         "size": 50, "order": "desc"},
         })
         references.append({"id": INDEX_PATTERN_ID, "name": ref_name, "type": "index-pattern"})
-    vis_state = {"title": title, "type": "input_control_vis", "aggs": [],
+    vis_state = {"title": display_title(title), "type": "input_control_vis", "aggs": [],
                  "params": {"controls": control_list, "updateFiltersOnChange": True,
                             "useTimeFilter": True, "pinFilters": False}}
     return {
@@ -191,7 +206,7 @@ def controls(title, fields):
         "type": "visualization",
         "migrationVersion": {"visualization": "7.10.0"},
         "attributes": {
-            "title": title, "description": "", "version": 1, "uiStateJSON": "{}",
+            "title": display_title(title), "description": "", "version": 1, "uiStateJSON": "{}",
             "visState": json.dumps(vis_state),
             "kibanaSavedObjectMeta": {"searchSourceJSON": search_source(with_index=False)},
         },
@@ -199,8 +214,11 @@ def controls(title, fields):
     }
 
 
-def dashboard(title, description, layout, time_from, refresh_ms):
-    """layout: list of (visualization_object, x, y, w, h). Grid is 48 wide."""
+def dashboard(title, id_key, description, layout, time_from, refresh_ms):
+    """layout: list of (visualization_object, x, y, w, h). Grid is 48 wide.
+
+    id_key seeds the object ID, so a dashboard can be renamed without changing its ID.
+    """
     panels = []
     references = []
     for i, (vis, x, y, w, h) in enumerate(layout):
@@ -210,7 +228,7 @@ def dashboard(title, description, layout, time_from, refresh_ms):
                        "embeddableConfig": {}, "panelRefName": f"panel_{i}"})
         references.append({"id": vis["id"], "name": f"panel_{i}", "type": "visualization"})
     return {
-        "id": obj_id("dashboard", title),
+        "id": obj_id("dashboard", id_key),
         "type": "dashboard",
         "migrationVersion": {"dashboard": "7.9.3"},
         "attributes": {
@@ -259,7 +277,7 @@ def delivery_health():
     traffic = visualization(
         "Streaming - Traffic summary", "metric",
         [count("Requests"),
-         metric("sum", "sc-bytes", "Data served", "2"),
+         gb_sum("Data served (GB)","2"),
          metric("cardinality", kw("c-ip"), "Unique client IPs (approx.)", "3")],
         METRIC_PARAMS)
     errors_5xx = visualization(
@@ -342,7 +360,7 @@ def delivery_health():
         (paths_5xx, 0, 54, 24, 18), (paths_4xx, 24, 54, 24, 18),
     ]
     dash = dashboard(
-        "CloudFront Streaming - Delivery Health",
+        "[Realtime] CloudFront Delivery Health", "CloudFront Streaming - Delivery Health",
         "Real-time CloudFront delivery health for PDS /data paths: traffic, errors, "
         "latency, and cache behavior.",
         layout, "now-24h", 60000)
@@ -352,7 +370,7 @@ def delivery_health():
 def data_usage():
     q_dl = "is_download:true"
     q_dir = f'{kw("request_type")}:"directory_listing"'
-    bytes_dl = "Data downloaded"
+    bytes_dl = "Data downloaded (GB)"
 
     filters = controls("Streaming - Usage filters", [
         (kw("data_area"), "Data area"),
@@ -364,7 +382,7 @@ def data_usage():
     downloads_kpi = visualization(
         "Streaming - Download summary", "metric",
         [count("Downloads"),
-         metric("sum", "sc-bytes", bytes_dl, "2"),
+         gb_sum(bytes_dl,"2"),
          metric("cardinality", kw("c-ip"), "Unique downloaders (approx.)", "3")],
         METRIC_PARAMS, query=q_dl,
         description="Downloads are successful GET responses with bytes for data, "
@@ -375,7 +393,7 @@ def data_usage():
 
     volume = visualization(
         "Streaming - Data downloaded over time by data area", "histogram",
-        [metric("sum", "sc-bytes", bytes_dl, "1"), date_histogram(),
+        [gb_sum(bytes_dl,"1"), date_histogram(),
          terms(kw("data_area"), "3", "group", size=8, other=True)],
         xy_params("histogram", [("1", bytes_dl, "histogram")], bytes_dl, mode="stacked"),
         query=q_dl)
@@ -386,14 +404,14 @@ def data_usage():
 
     missions = visualization(
         "Streaming - Top missions by data downloaded", "horizontal_bar",
-        [metric("sum", "sc-bytes", bytes_dl, "1"),
+        [gb_sum(bytes_dl,"1"),
          terms(kw("mission"), "2", "segment", size=15)],
         hbar_params(bytes_dl), query=q_dl)
     collections = visualization(
         "Streaming - Top collections", "table",
         [count("Downloads"),
          terms(kw("collection"), "2", "bucket", size=25, label="Collection"),
-         metric("sum", "sc-bytes", bytes_dl, "3"),
+         gb_sum(bytes_dl,"3"),
          metric("cardinality", kw("c-ip"), "Unique IPs", "4")],
         TABLE_PARAMS, query=q_dl)
 
@@ -401,13 +419,13 @@ def data_usage():
         "Streaming - Downloads by file type", "table",
         [count("Downloads"),
          terms(kw("file_extension"), "2", "bucket", size=20, label="Extension"),
-         metric("sum", "sc-bytes", bytes_dl, "3")],
+         gb_sum(bytes_dl,"3")],
         TABLE_PARAMS, query=q_dl)
     countries = visualization(
         "Streaming - Top countries", "table",
         [count("Downloads"),
          terms(kw("c-country"), "2", "bucket", size=20, label="Country"),
-         metric("sum", "sc-bytes", bytes_dl, "3"),
+         gb_sum(bytes_dl,"3"),
          metric("cardinality", kw("c-ip"), "Unique IPs", "4")],
         TABLE_PARAMS, query=q_dl)
     referrers = visualization(
@@ -420,7 +438,7 @@ def data_usage():
         "Streaming - Top downloaded files", "table",
         [count("Downloads"),
          terms(kw("cs-uri-stem"), "2", "bucket", size=25, label="Path"),
-         metric("sum", "sc-bytes", bytes_dl, "3"),
+         gb_sum(bytes_dl,"3"),
          metric("cardinality", kw("c-ip"), "Unique IPs", "4")],
         TABLE_PARAMS, query=q_dl)
     directories = visualization(
@@ -434,11 +452,11 @@ def data_usage():
         "Streaming - Top user agents", "table",
         [count("Requests"),
          terms(kw("cs-user-agent"), "2", "bucket", size=20, label="User agent"),
-         metric("sum", "sc-bytes", "Data served", "3")],
+         gb_sum("Data served (GB)","3")],
         TABLE_PARAMS)
     clients = visualization(
         "Streaming - Top clients by data downloaded", "table",
-        [metric("sum", "sc-bytes", bytes_dl, "1"),
+        [gb_sum(bytes_dl,"1"),
          terms(kw("c-ip"), "2", "bucket", size=20, label="Client IP"),
          count("Downloads", agg_id="3"),
          terms(kw("c-country"), "4", "bucket", size=1, label="Country")],
@@ -455,7 +473,7 @@ def data_usage():
         (user_agents, 0, 82, 24, 17), (clients, 24, 82, 24, 17),
     ]
     dash = dashboard(
-        "CloudFront Streaming - Data Usage",
+        "[Realtime] CloudFront Data Usage", "CloudFront Streaming - Data Usage",
         "What PDS data is being downloaded and browsed: data areas, missions, "
         "collections, file types, countries, and clients.",
         layout, "now-7d", 0)
