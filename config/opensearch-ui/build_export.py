@@ -403,7 +403,7 @@ def data_usage():
         PIE_PARAMS)
 
     missions = visualization(
-        "Streaming - Top missions by data downloaded", "histogram",
+        "Streaming - Top missions by data downloaded", "horizontal_bar",
         [gb_sum(bytes_dl,"1"),
          terms(kw("mission"), "2", "segment", size=15)],
         hbar_params(bytes_dl), query=q_dl)
