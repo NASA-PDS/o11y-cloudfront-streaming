@@ -142,7 +142,7 @@ No modules.
 
 | Resource | Name | Settings |
 |---|---|---|
-| Kinesis stream | `pds-o11y-cloudfront-streaming-kinesis` | On-demand; 90-day retention (2160 hours); server-side encryption off |
+| Kinesis stream | `pds-o11y-cloudfront-streaming-kinesis` | On-demand; 90-day retention (2160 hours); server-side encryption with the AWS managed key `alias/aws/kinesis` (`encryption_type = "KMS"`) |
 | Lambda | `pds-o11y-cloudfront-streaming-transform` | Python 3.12, `x86_64`; 512 MB memory, 512 MB ephemeral storage; 300 s timeout; `$LATEST` (`publish = false`); log group `/aws/lambda/<name>`, 30-day retention |
 | Firehose | `pds-o11y-cloudfront-streaming-firehose` | Source: the Kinesis stream. Processor: the Lambda (`$LATEST`) at the Firehose default buffer (1 MiB / 60 s). Destination: `pds-<env>-o11y` domain, index `pds-o11y-cloudfront-streaming-index-YYYY-MM-DD` (daily rotation), 1 MiB / 60 s buffer, 300 s retry. Runs in `private_subnet_ids` with the Firehose security group |
 | S3 backup | `pds-logs-<env>` (ARN from SSM) | All documents, GZIP, 5 MiB / 300 s buffer. Objects: `<pds_logs_firehose_prefix>/YYYY/MM/DD/HH/`; failures: `<pds_logs_firehose_prefix>/errors/<error-type>/YYYY/MM/DD/HH/` |

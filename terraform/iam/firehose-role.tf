@@ -114,6 +114,27 @@ data "aws_iam_policy_document" "firehose_kinesis_read" {
 
     resources = [local.kinesis_stream_arn]
   }
+
+  statement {
+    sid    = "DecryptRealtimeLogStream"
+    effect = "Allow"
+
+    actions = ["kms:Decrypt"]
+
+    resources = [local.kinesis_kms_key_arn_pattern]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = [local.kinesis_kms_via_service]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:EncryptionContext:aws:kinesis:arn"
+      values   = [local.kinesis_stream_arn]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "firehose_kinesis_read" {

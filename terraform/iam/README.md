@@ -5,8 +5,8 @@ Standalone root module (own state) for the three IAM roles used by the pipeline 
 
 | Role | Trusted by | Allows |
 |---|---|---|
-| `pds-o11y-cloudfront-streaming-cf-kinesis-role` | CloudFront (same account) | Write records to the Kinesis stream |
-| `pds-o11y-cloudfront-streaming-firehose-role` | Firehose | Read the Kinesis stream; invoke the transform Lambda; `es:*` on the OpenSearch domain; write the S3 backup under `pds_logs_firehose_prefix`; write CloudWatch Logs; manage VPC network interfaces |
+| `pds-o11y-cloudfront-streaming-cf-kinesis-role` | CloudFront (same account) | Write records to the Kinesis stream; `kms:GenerateDataKey` for the stream's server-side encryption |
+| `pds-o11y-cloudfront-streaming-firehose-role` | Firehose | Read the Kinesis stream; `kms:Decrypt` for the stream's server-side encryption; invoke the transform Lambda; `es:*` on the OpenSearch domain; write the S3 backup under `pds_logs_firehose_prefix`; write CloudWatch Logs; manage VPC network interfaces |
 | `pds-o11y-cloudfront-streaming-transform-role` | Lambda | `AWSLambdaBasicExecutionRole` (CloudWatch Logs) |
 
 <!-- BEGIN_TF_DOCS -->
