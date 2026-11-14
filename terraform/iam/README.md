@@ -5,8 +5,8 @@ Standalone root module (own state) for the three IAM roles used by the pipeline 
 
 | Role | Trusted by | Allows |
 |---|---|---|
-| `pds-o11y-cloudfront-streaming-cf-kinesis-role` | CloudFront (same account) | Write records to the Kinesis stream |
-| `pds-o11y-cloudfront-streaming-firehose-role` | Firehose | Read the Kinesis stream; invoke the transform Lambda; `es:*` on the OpenSearch domain; write the S3 backup under `pds_logs_firehose_prefix`; write CloudWatch Logs; manage VPC network interfaces |
+| `pds-o11y-cloudfront-streaming-cf-kinesis-role` | CloudFront (same account) | Write records to the Kinesis stream; `kms:GenerateDataKey` for the stream's server-side encryption |
+| `pds-o11y-cloudfront-streaming-firehose-role` | Firehose | Read the Kinesis stream; `kms:Decrypt` for the stream's server-side encryption; invoke the transform Lambda; `es:*` on the OpenSearch domain; write the S3 backup under `pds_logs_firehose_prefix`; write CloudWatch Logs; manage VPC network interfaces |
 | `pds-o11y-cloudfront-streaming-transform-role` | Lambda | `AWSLambdaBasicExecutionRole` (CloudWatch Logs) |
 
 <!-- BEGIN_TF_DOCS -->
@@ -57,6 +57,7 @@ No modules.
 | [aws_iam_policy_document.firehose_s3_backup](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.firehose_vpc_access](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.lambda_assume_role](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_kms_key.kinesis](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/kms_key) | data source |
 | [aws_partition.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/partition) | data source |
 | [aws_ssm_parameter.pds_logs_bucket_arn](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
 
@@ -69,6 +70,7 @@ No modules.
 | <a name="input_cicd"></a> [cicd](#input\_cicd) | CI/CD tag. | `string` | `"iac"` | no |
 | <a name="input_component"></a> [component](#input\_component) | Component tag. Matches the GitHub repository name. | `string` | `"o11y-cloudfront-streaming"` | no |
 | <a name="input_env"></a> [env](#input\_env) | Deployment env. Used to derive the existing OpenSearch domain name. | `string` | `"dev"` | no |
+| <a name="input_kinesis_kms_key_arn"></a> [kinesis\_kms\_key\_arn](#input\_kinesis\_kms\_key\_arn) | ARN of the AWS managed key alias/aws/kinesis (the key that encrypts the Kinesis stream). When null, the key is looked up by alias in the account and region. | `string` | `null` | no |
 | <a name="input_pds_logs_firehose_prefix"></a> [pds\_logs\_firehose\_prefix](#input\_pds\_logs\_firehose\_prefix) | S3 prefix within the pds-logs-<env> bucket where Firehose backup records are written. | `string` | `"pdc-cds-infra/cloudfront/realtime/firehose"` | no |
 | <a name="input_tenant"></a> [tenant](#input\_tenant) | Tenant tag. | `string` | `"en"` | no |
 | <a name="input_venue"></a> [venue](#input\_venue) | Venue tag. | `string` | `"pds-cds-dev"` | no |
@@ -84,6 +86,37 @@ No modules.
 | <a name="output_lambda_execution_role_arn"></a> [lambda\_execution\_role\_arn](#output\_lambda\_execution\_role\_arn) | ARN of the Lambda execution role. |
 | <a name="output_lambda_execution_role_arn_ssm_parameter_name"></a> [lambda\_execution\_role\_arn\_ssm\_parameter\_name](#output\_lambda\_execution\_role\_arn\_ssm\_parameter\_name) | SSM parameter name containing the Lambda execution IAM role ARN. |
 <!-- END_TF_DOCS -->
+
+## Kinesis KMS key
+
+The stream is encrypted with the AWS managed key `alias/aws/kinesis`. The `kms:GenerateDataKey`
+(CloudFront role) and `kms:Decrypt` (Firehose role) statements are scoped to that key's ARN, which
+the `aws_kms_key` data source reads at plan time. Both statements are also limited by
+`kms:ViaService` (`kinesis.<region>.<dns-suffix>`) and `kms:EncryptionContext:aws:kinesis:arn`
+(this stream's ARN). The key ARN is stable, so the policies do not change between plans.
+
+- **Permission:** the principal that plans and applies this module needs `kms:DescribeKey` on the key.
+- **Key not found:** AWS creates the AWS managed key when the service first uses it, and this
+  module applies before the stream exists, so on a venue that has never used Kinesis encryption in
+  the region the lookup can fail at plan time with a not-found error for `alias/aws/kinesis`. The
+  KMS `DescribeKey` API documents that a predefined AWS alias (`alias/aws/...`) is associated with
+  an AWS managed key when it is described, so the check below may create the key; that behavior
+  is documented for AWS services and has not been confirmed for a call made with user credentials.
+  If the check still reports not found, enable server-side encryption with `alias/aws/kinesis`
+  on any Kinesis stream in the region once (for example a temporary stream), confirm the check
+  below returns a key, then re-plan.
+- **Override:** `kinesis_kms_key_arn` skips the lookup and scopes the two statements to the ARN you
+  give. Use it when the applying principal cannot call `kms:DescribeKey`. The stream's `kms_key_id`
+  is the alias `alias/aws/kinesis` (set in [`../`](../README.md)), so the ARN must be the key that
+  the alias resolves to; a different ARN would leave the roles without access to the stream's key.
+
+Check the key from the CLI:
+
+```bash
+REGION="us-west-2"
+aws kms describe-key --region "${REGION}" --key-id alias/aws/kinesis \
+  --query 'KeyMetadata.[Arn,KeyManager,KeyState]' --output text
+```
 
 ## SSM parameters
 

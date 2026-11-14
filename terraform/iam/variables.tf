@@ -44,6 +44,17 @@ variable "managedby" {
   type        = string
 }
 
+variable "kinesis_kms_key_arn" {
+  description = "ARN of the AWS managed key alias/aws/kinesis (the key that encrypts the Kinesis stream). When null, the key is looked up by alias in the account and region."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.kinesis_kms_key_arn == null || can(regex("^arn:[a-z-]+:kms:[a-z0-9-]+:[0-9]{12}:key/[0-9a-zA-Z-]+$", var.kinesis_kms_key_arn))
+    error_message = "kinesis_kms_key_arn must be null or a KMS key ARN (arn:<partition>:kms:<region>:<account-id>:key/<key-id>)."
+  }
+}
+
 variable "pds_logs_firehose_prefix" {
   description = "S3 prefix within the pds-logs-<env> bucket where Firehose backup records are written."
   type        = string
