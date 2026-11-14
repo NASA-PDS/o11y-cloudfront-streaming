@@ -121,7 +121,7 @@ data "aws_iam_policy_document" "firehose_kinesis_read" {
 
     actions = ["kms:Decrypt"]
 
-    resources = [local.kinesis_kms_key_arn_pattern]
+    resources = [local.kinesis_kms_key_arn]
 
     condition {
       test     = "StringEquals"

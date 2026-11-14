@@ -14,19 +14,20 @@ locals {
   # Every name above is a static literal (no random suffixes), so the ARNs the
   # policies below need can be computed without a live resource reference to
   # the main module. This is what lets iam/ apply independently, in either
-  # order relative to the main module.
+  # order relative to the main module. The only value read from the account is
+  # the Kinesis KMS key ARN (see kinesis_kms_key_arn below).
   kinesis_stream_arn    = "arn:${data.aws_partition.current.partition}:kinesis:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stream/${local.kinesis_stream_name}"
   lambda_function_arn   = "arn:${data.aws_partition.current.partition}:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${local.lambda_function_name}"
   opensearch_domain_arn = "arn:${data.aws_partition.current.partition}:es:${var.aws_region}:${data.aws_caller_identity.current.account_id}:domain/${local.opensearch_domain_name}"
 
-  # The stream is encrypted with the AWS managed Kinesis key (alias/aws/kinesis).
-  # That key may not exist in an account/region until Kinesis first uses it, so
-  # the policies match any key ARN in this account/region and rely on the
-  # kms:ViaService and stream encryption-context conditions to confine use to
-  # this stream. Keeping this a computed pattern preserves independent apply
-  # order for iam/.
-  kinesis_kms_key_arn_pattern = "arn:${data.aws_partition.current.partition}:kms:${var.aws_region}:${data.aws_caller_identity.current.account_id}:key/*"
-  kinesis_kms_via_service     = "kinesis.${var.aws_region}.${data.aws_partition.current.dns_suffix}"
+  # The stream is encrypted with the AWS managed Kinesis key, which the stream
+  # references by alias. The KMS statements are scoped to that key's ARN:
+  # var.kinesis_kms_key_arn when set, otherwise the key that the alias resolves
+  # to (data.aws_kms_key.kinesis). The ARN of an AWS managed key is stable, so
+  # the policy documents do not change between plans.
+  kinesis_kms_key_alias   = "alias/aws/kinesis"
+  kinesis_kms_key_arn     = coalesce(var.kinesis_kms_key_arn, one(data.aws_kms_key.kinesis[*].arn))
+  kinesis_kms_via_service = "kinesis.${var.aws_region}.${data.aws_partition.current.dns_suffix}"
 
   cloudfront_role_arn_ssm_parameter_name       = "/pds/o11y-cloudfront-streaming/cloudfront/cloudfront-role-arn"
   firehose_role_arn_ssm_parameter_name         = "/pds/o11y-cloudfront-streaming/firehose/firehose-role-arn"

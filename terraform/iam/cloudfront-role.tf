@@ -46,7 +46,7 @@ data "aws_iam_policy_document" "cloudfront_realtime_log_kinesis" {
 
     actions = ["kms:GenerateDataKey"]
 
-    resources = [local.kinesis_kms_key_arn_pattern]
+    resources = [local.kinesis_kms_key_arn]
 
     condition {
       test     = "StringEquals"

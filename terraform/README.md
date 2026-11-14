@@ -24,7 +24,9 @@ Venue inputs are in `cds-infra-deploy` at `venues/<venue>/o11y-cloudfront-stream
 The two modules would depend on each other: the IAM policies need the ARNs of the Kinesis stream
 and Lambda function, and this module needs the role ARNs. All resource names are static literals,
 so `iam/` computes those ARNs from the account ID, partition, and name locals and applies first,
-without this module's resources existing. This module reads the role ARNs back from SSM.
+without this module's resources existing. This module reads the role ARNs back from SSM. The one
+exception is the AWS managed Kinesis key: `iam/` looks up its ARN to scope the KMS permissions
+(see [`iam/` Kinesis KMS key](./iam/README.md#kinesis-kms-key)).
 
 ```mermaid
 flowchart LR
